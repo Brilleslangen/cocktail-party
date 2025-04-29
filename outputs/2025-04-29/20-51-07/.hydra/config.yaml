@@ -1,0 +1,16 @@
+model:
+  encoder:
+    _target_: src.models.tasnet.VanillaEncoder
+    'N': 64
+    L: 64
+    stride: 32
+    causal: true
+  decoder:
+    _target_: src.models.tasnet.VanillaDecoder
+    'N': 64
+    L: 64
+    stride: 32
+    causal: true
+  feature_dim: 512
+  stft_stride: 32
+  mono_fallback: false

@@ -1,0 +1,20 @@
+model:
+  encoder:
+    _target_: src.models.coders.ConvTasNetEncoder
+    'N': 64
+    L: 64
+    stride: 32
+    causal: true
+  separator:
+    _target_: src.models.separator.TCNSeparator
+    num_stacks: 5
+    blocks_per_stack: 7
+  decoder:
+    _target_: src.models.coders.ConvTasNetDecoder
+    'N': 64
+    L: 64
+    stride: 32
+    causal: true
+  feature_dim: 512
+  stft_stride: 32
+  mono_fallback: false

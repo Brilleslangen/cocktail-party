@@ -1,0 +1,7 @@
+model:
+  encoder:
+    _target_: src.models.tasnet.VanillaEncoder
+  separator:
+    _target_: src.models.tasnet.TCN
+  decoder:
+    _target_: src.models.tasnet.VanillaDecoder
