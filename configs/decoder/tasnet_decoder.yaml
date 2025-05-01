@@ -1,0 +1,5 @@
+_target_: "src.models.decoder.TasNetDecoder"
+num_filters: 64      # number of basis filters
+filter_length: 64    # filter length in samples (4 ms @16 kHz)
+stride: 32           # hop size (L//2)
+causal: true         # causal convolution

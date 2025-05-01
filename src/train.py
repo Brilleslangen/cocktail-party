@@ -1,30 +1,18 @@
+import hydra
+from omegaconf import OmegaConf, DictConfig
+from hydra.utils import instantiate
+import torch
 
 
-class Trainer:
-    def __init__(self, model, optimizer, loss_fn):
-        self.model = model
-        self.optimizer = optimizer
-        self.loss_fn = loss_fn
+@hydra.main(config_path="../configs", config_name="tasnet_baseline")
+def main(cfg: DictConfig):
+    model = instantiate(cfg.model_arch)
 
-    def train(self, train_loader, val_loader, epochs):
-        for epoch in range(epochs):
-            self.model.train()
-            for batch in train_loader:
-                inputs, targets = batch
-                outputs = self.model(inputs)
-                loss = self.loss_fn(outputs, targets)
+    print("\n=== TasNet Model Architecture ===")
+    print(model)
+    print("\n=== Effective Configuration ===")
+    print(OmegaConf.to_yaml(cfg))
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
 
-            self.validate(val_loader)
-
-    def validate(self, val_loader):
-        self.model.eval()
-        with torch.no_grad():
-            for batch in val_loader:
-                inputs, targets = batch
-                outputs = self.model(inputs)
-                loss = self.loss_fn(outputs, targets)
-                # Add validation metrics here
+if __name__ == "__main__":
+    main()

@@ -1,26 +1,51 @@
-from typing import Tuple
+from typing import Tuple, Any
 import torch
 import torch.nn as nn
 from hydra.utils import instantiate
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
-from src.config import TasNetConfig
+from src.models.submodules import SubModule
 
 
 class TasNet(nn.Module):
-    def __init__(self, config: TasNetConfig | DictConfig):
+    def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, feature_dim: int,
+                 stft_stride: int, **kwargs: Any):
         super().__init__()
-        self.encoder = instantiate(config.encoder)
-        self.decoder = instantiate(config.decoder)
+        # instantiate enc/dec from their Hydra blocks
+        self.encoder: SubModule = instantiate(encoder)
+        self.decoder: SubModule = instantiate(decoder)
 
-        # --- Spatial feature params ---
-        self.stft_window = config.feature_dim
-        self.stft_hop = config.stft_stride
+        # STFT params
+        self.stft_window = feature_dim
+        self.stft_stride = stft_stride
 
-        # Separator input dim = 2*D + 3*F (ILD + cos(IPD) + sin(IPD))
-        freq_bins = self.stft_window // 2 + 1
-        sep_input_dim = 2 * config.feature_dim + 3 * freq_bins
-        # self.separator = instantiate(config.separator, input_dim=sep_input_dim)
+        # Compute separator input/output dimensions
+        D = self.encoder.get_output_dim()  # encoder channel dim
+        F = self.stft_window // 2 + 1  # freq‐bins from STFT
+        separator.input_dim = 2 * D + 3 * F  # left+right (2D) + spatial (3F)
+        separator.output_dim = 2 * D  # two masks of size D
+
+        print(f"Separator config: {separator}")
+        self.separator: SubModule = instantiate(separator)
+
+    def pad_signal(self, input):
+        # Ensure input is shape (B, 1, T) or (B, 2, T)
+        if input.dim() == 2:
+            input = input.unsqueeze(1)  # [B, 1, T]
+        batch, ch, T = input.shape
+
+        # 2) Compute how much “rest” padding you need so (T + 2*pad) is divisible by win/stride
+        win, stride = self.win, self.stride
+        rest = win - (stride + T % win) % win
+        if rest > 0:
+            pad = input.new_zeros(batch, ch, rest)
+            input = torch.cat([input, pad], dim=2)
+
+        # 3) Pad an extra `stride` on both ends
+        pad_aux = input.new_zeros(batch, ch, stride)
+        input = torch.cat([pad_aux, input, pad_aux], dim=2)
+
+        return input, rest
 
     def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
         """
@@ -77,7 +102,7 @@ class TasNet(nn.Module):
         # Preprocess
         encoded_left = self.encoder(left_input)  # [B, frames, D]
         encoded_right = self.encoder(right_input)  # [B, frames, D]
-        spatial_feats = self.compute_spatial_features(left_input, right_input) # [B, frames, 3*F]
+        spatial_feats = self.compute_spatial_features(left_input, right_input)  # [B, frames, 3*F]
 
         # Fusion: [left; right; spatial]
         fused_input = torch.cat([encoded_left,
@@ -86,7 +111,9 @@ class TasNet(nn.Module):
                                 dim=-1)  # [B, frames, 2D + 3F]
 
         # Produce isolation masks for left/right channels
-        mask_estimates = self.separator(fused_input)  # [B, frames, 2D]
+        fused_cf = fused_input.permute(0, 2, 1)  # Channel before time
+        mask_estimates = self.separator(fused_cf)  # [Batch, 2*Channel_dim, Time]
+        mask_estimates = mask_estimates.permute(0, 2, 1)  # Restore time-major
         mask_left, mask_right = mask_estimates.chunk(2, dim=-1)  # each [B, frames, D]
 
         # Apply masks to encoded features
@@ -98,51 +125,3 @@ class TasNet(nn.Module):
         right_output = self.decoder(masked_right)
 
         return left_output, right_output
-
-
-class VanillaEncoder(nn.Module):
-    """
-    Time-domain analysis filterbank as in Conv-TasNet:
-      1) 1-D Conv (1→N filters)
-      2) Non-negative activation (ReLU)
-    See Luo & Mesgarani
-    """
-    def __init__(self, N: int, L: int, stride: int, causal: bool):
-        super().__init__()
-        padding = L - stride if causal else (L // 2)
-        self.conv1d = nn.Conv1d(1, N, kernel_size=L,
-                                stride=stride, padding=padding, bias=False)
-        self.relu = nn.ReLU()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        x: [B,  T] or [B, 1, T]
-        returns: [B, N, T_frames]
-        """
-        if x.dim() == 2:
-            x = x.unsqueeze(1)  # [B,1,T]
-        w = self.conv1d(x)  # [B,N,T']
-        w = self.relu(w)  # enforce non-negativity
-        return w
-
-
-class VanillaDecoder(nn.Module):
-    """
-    Inverse filterbank via transposed convolution:
-      1) 1-D ConvTranspose (N→1 filters)
-      2) Overlap-add reconstruction
-    """
-
-    def __init__(self, N: int, L: int, stride: int, causal: bool):
-        super().__init__()
-        padding = L - stride if causal else (L // 2)
-        self.deconv1d = nn.ConvTranspose1d(N, 1, kernel_size=L, stride=stride, padding=padding, bias=False)
-
-    def forward(self, w: torch.Tensor) -> torch.Tensor:
-        """
-        w: [B, N, T_frames]
-        returns: [B, 1, T]  or squeeze to [B, T]
-        """
-        x_hat = self.deconv1d(w)  # [B,1,T]
-        return x_hat.squeeze(1)  # [B, T]
-
