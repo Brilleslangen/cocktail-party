@@ -15,12 +15,8 @@ class TCNSeparator(SubModule):
         self.output_dim = output_dim
 
         # normalization
-        if not causal:
-            self.LN = nn.GroupNorm(1, input_dim, eps=1e-8)
-        else:
-            self.LN = cLN(input_dim, eps=1e-8)
-
-        self.BN = nn.Conv1d(input_dim, bn_dim, 1)
+        self.LN = cLN(input_dim, eps=1e-8) if causal else nn.GroupNorm(1, input_dim, eps=1e-8)
+        self.BN = nn.Conv1d(input_dim, bn_dim, 1, bias=False)  # Bias in cLN already
 
         # TCN for feature extraction
         self.receptive_field = 0
@@ -156,7 +152,6 @@ class cLN(nn.Module):
         entry_cnt = torch.arange(channel, channel * (time_step + 1), channel, device=input.device,
                                  dtype=input.dtype)  # shape [time_step]
         entry_cnt = entry_cnt.unsqueeze(0).expand(batch_size, time_step)
-        entry_cnt = entry_cnt.view(1, -1).expand_as(cum_sum)
 
         cum_mean = cum_sum / entry_cnt  # B, T
         cum_var = (cum_pow_sum - 2 * cum_mean * cum_sum) / entry_cnt + cum_mean.pow(2)  # B, T

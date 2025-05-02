@@ -23,8 +23,7 @@ class TasNetDecoder(SubModule):
         w: [B, N, T_frames]
         returns: [B, 1, T]  or squeeze to [B, T]
         """
-        x_hat = self.deconv1d(w)  # [B,1,T]
-        return x_hat.squeeze(1)  # [B, T]
+        return self.deconv1d(w)  # [B,1,T]
 
     def get_input_dim(self) -> int:
         return self.num_filters

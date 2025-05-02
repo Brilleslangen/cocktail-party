@@ -21,30 +21,30 @@ class TasNet(nn.Module):
         # Compute separator input/output dimensions
         D = self.encoder.get_output_dim()  # encoder channel dim
         F = self.stft_window // 2 + 1  # freq‐bins from STFT
-        separator.input_dim = 2 * D + 3 * F  # left+right (2D) + spatial (3F)
-        separator.output_dim = 2 * D  # two masks of size D
+        sep_input_dim = 2 * D + 3 * F  # left+right (2D) + spatial (3F)
+        sep_output_dim = 2 * D  # two masks of size D
 
         print(f"Separator config: {separator}")
-        self.separator: SubModule = instantiate(separator)
+        self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim)
 
-    def pad_signal(self, input):
-        # Ensure input is shape (B, 1, T) or (B, 2, T)
-        if input.dim() == 2:
-            input = input.unsqueeze(1)  # [B, 1, T]
-        batch, ch, T = input.shape
-
-        # 2) Compute how much “rest” padding you need so (T + 2*pad) is divisible by win/stride
-        win, stride = self.win, self.stride
-        rest = win - (stride + T % win) % win
+    def pad_signal(self, mixture: torch.Tensor):
+        """
+        mixture: [B, C, T] with C=1 or 2
+        Returns:
+          padded: [B, C, T + rest + 2*stride]
+          rest:   how many zeros were appended at the end (before the final stride-padding)
+        """
+        B, C, T = mixture.shape
+        # pad “rest” so (T + rest) is divisible by win/stride
+        win, st = self.stft_window, self.stft_stride
+        rest = win - (st + T % win) % win
         if rest > 0:
-            pad = input.new_zeros(batch, ch, rest)
-            input = torch.cat([input, pad], dim=2)
-
-        # 3) Pad an extra `stride` on both ends
-        pad_aux = input.new_zeros(batch, ch, stride)
-        input = torch.cat([pad_aux, input, pad_aux], dim=2)
-
-        return input, rest
+            pad = mixture.new_zeros(B, C, rest)
+            mixture = torch.cat([mixture, pad], dim=2)
+        # pad an extra stride on both ends
+        pad_aux = mixture.new_zeros(B, C, st)
+        mixture = torch.cat([pad_aux, mixture, pad_aux], dim=2)
+        return mixture, rest
 
     def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
         """
@@ -89,15 +89,16 @@ class TasNet(nn.Module):
         spatial_feats = torch.cat([ild_t, cos_t, sin_t], dim=-1)  # [B, T, 3F]
         return spatial_feats.permute(0, 2, 1)  # [B, 3F, T]
 
-    def forward(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, padded_mixture: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
-            mixture: [batch, 2, time_samples]
+            padded_mixture: [batch, 2, time_samples]
         Returns:
             (left_out, right_out) for binaural
             or mono_out if mono_fallback=True
         """
-        left_input, right_input = mixture[:, 0], mixture[:, 1]
+        padded_mixture, rest = self.pad_signal(padded_mixture)  # [B, C, T]
+        left_input, right_input = padded_mixture[:, 0], padded_mixture[:, 1]
 
         # Preprocess
         encoded_left = self.encoder(left_input)
@@ -108,7 +109,7 @@ class TasNet(nn.Module):
         fused_input = torch.cat([encoded_left,
                                  encoded_right,
                                  spatial_feats],
-                                dim=1)  # [B, frames, 2D + 3F]
+                                dim=1)  # [B, frames, 2D + 3F]p
 
         # Produce isolation masks for left/right channels
         mask_estimates = self.separator(fused_input)   # [Batch, 2*Channel_dim, Time]
@@ -118,8 +119,8 @@ class TasNet(nn.Module):
         masked_left = mask_left * encoded_left
         masked_right = mask_right * encoded_right
 
-        # Decode to time-domain waveforms
-        left_output = self.decoder(masked_left)
-        right_output = self.decoder(masked_right)
+        # Decode to time-domain waveforms and unpad.
+        left_output = self.decoder(masked_left)[:, :, self.stft_stride:-(rest+self.stft_stride)].squeeze(1)  # [B, T]
+        right_output = self.decoder(masked_right)[:, :, self.stft_stride:-(rest+self.stft_stride)].squeeze(1)  # [B, T]
 
         return left_output, right_output
