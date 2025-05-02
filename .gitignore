@@ -251,4 +251,7 @@ fabric.properties
 # PyPI configuration file
 .pypirc
 
+# Custom
+outputs/
+.idea/
 data/

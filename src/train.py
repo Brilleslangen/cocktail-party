@@ -1,30 +1,34 @@
+import hydra
+import torch
+from omegaconf import OmegaConf, DictConfig
+from hydra.utils import instantiate
 
 
-class Trainer:
-    def __init__(self, model, optimizer, loss_fn):
-        self.model = model
-        self.optimizer = optimizer
-        self.loss_fn = loss_fn
+@hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
+def main(cfg: DictConfig):
+    model = instantiate(cfg.model_arch)
 
-    def train(self, train_loader, val_loader, epochs):
-        for epoch in range(epochs):
-            self.model.train()
-            for batch in train_loader:
-                inputs, targets = batch
-                outputs = self.model(inputs)
-                loss = self.loss_fn(outputs, targets)
+    print("\n=== TasNet Model Architecture ===")
+    print(model)
+    print("\n=== Effective Configuration ===")
+    print(OmegaConf.to_yaml(cfg))
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+    test_model(model)
 
-            self.validate(val_loader)
 
-    def validate(self, val_loader):
-        self.model.eval()
-        with torch.no_grad():
-            for batch in val_loader:
-                inputs, targets = batch
-                outputs = self.model(inputs)
-                loss = self.loss_fn(outputs, targets)
-                # Add validation metrics here
+def test_model(model):
+    # batch size 2, stereo channels, 32000 samples
+    batch, channels, time = 2, 2, 32000
+    mixture = torch.rand(batch, channels, time)
+
+    # forward returns a tuple (left, right)
+    left_out, right_out = model(mixture)
+
+    assert left_out.shape == (batch, time),  f"Expected (B, T), got {left_out.shape}"
+    assert right_out.shape == (batch, time), f"Expected (B, T), got {right_out.shape}"
+
+    print(f"Test passed! Output shapes: left={left_out.shape}, right={right_out.shape}")
+
+
+if __name__ == "__main__":
+    main()
