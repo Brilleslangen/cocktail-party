@@ -254,3 +254,4 @@ fabric.properties
 # Custom
 outputs/
 .idea/
+data/
