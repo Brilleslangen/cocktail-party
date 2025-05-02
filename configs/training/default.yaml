@@ -1,5 +1,19 @@
-batch_size:      16
-lr:              1e-3
-num_epochs:      100
-seed:            42
+params:
+  batch_size:   16
+  num_workers:  4
+  max_epochs:  100
+  n_buckets:   10
+  seed:        42
 
+optimizer:
+  _target_: "torch.optim.AdamW"
+  lr:            1e-3      # base learning rate
+  betas:         [0.9, 0.999]
+  eps:           1e-8
+  weight_decay: 1e-5      # decoupled L2
+
+scheduler:
+  _target_: "torch.optim.lr_scheduler.CosineAnnealingWarmRestarts"
+  T_0:       ${training.params.max_epochs}   # one full cosine cycle per epoch
+  T_mult:    1
+  eta_min:   1e-6

@@ -1,0 +1,6 @@
+_target_: "src.models.decoder.TasNetDecoder"
+num_filters: 64           # number of basis filters (output dimensionality -> expressive)
+filter_length_ms: 4.0     # filter length in ms (64 filters at @16 kHz)
+stride_ms: ${model_arch.stride_ms}
+sample_rate: ${model_arch.sample_rate}
+causal: true              # causal convolution

@@ -1,5 +1,7 @@
 import torch
 from torch import nn
+
+from src.helpers import ms_to_samples
 from src.models.submodules import SubModule
 
 
@@ -11,7 +13,7 @@ class TasNetEncoder(SubModule):
       1) 1-D convolution to project raw waveform into N-dimensional feature space
       2) Non-negative activation via ReLU to enforce positivity
     """
-    def __init__(self, num_filters: int, filter_length: int, stride: int, causal: bool):
+    def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool):
         """
         Initialize the Conv1d encoder.
 
@@ -27,16 +29,18 @@ class TasNetEncoder(SubModule):
         # Input is always single-channel waveform
         self.in_channels = 1
         self.num_filters = num_filters
+        self.filter_length = ms_to_samples(filter_length_ms, sample_rate)  # filter length in samples
+        self.stride = ms_to_samples(stride_ms, sample_rate)  # stride in samples
 
         # Determine padding: causal vs non-causal
-        pad = filter_length - stride if causal else (filter_length // 2)
+        pad = self.filter_length - self.stride if causal else (self.filter_length // 2)
 
         # 1-D convolution: [B, 1, T] → [B, N, T_frames]
         self.conv1d = nn.Conv1d(
             in_channels=self.in_channels,
             out_channels=self.num_filters,
-            kernel_size=filter_length,
-            stride=stride,
+            kernel_size=self.filter_length,
+            stride=self.stride,
             padding=pad,
             bias=False
         )

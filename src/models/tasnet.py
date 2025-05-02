@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 from hydra.utils import instantiate
 from omegaconf import DictConfig
+
+from src.helpers import ms_to_samples
 from src.models.submodules import SubModule
 
 
@@ -18,9 +20,10 @@ class TasNet(nn.Module):
       5) applying masks and decoding back to waveforms.
     """
 
-    def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, feature_dim: int,
-                 stride: int, **kwargs: Any):
+    def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, sample_rate: int,
+                 window_length_ms: float, stride_ms: float, **kwargs: Any):
         super().__init__()
+
         # -------------------------------------------------------------------
         # Instantiate encoder and decoder from their Hydra configs
         # -------------------------------------------------------------------
@@ -30,8 +33,8 @@ class TasNet(nn.Module):
         # -------------------------------------------------------------------
         # STFT parameters for spatial features
         # -------------------------------------------------------------------
-        self.stft_window = feature_dim  # STFT window length (samples)
-        self.stft_hop = stride  # STFT hop length (samples)
+        self.stft_window = ms_to_samples(window_length_ms, sample_rate)  # STFT window length (samples)
+        self.stft_hop = ms_to_samples(stride_ms, sample_rate)  # STFT hop length (samples)
         self.register_buffer("stft_window_fn", torch.hann_window(self.stft_window))
 
         # -------------------------------------------------------------------
@@ -43,7 +46,7 @@ class TasNet(nn.Module):
         sep_output_dim = 2 * D  # two masks of size D
 
         # Instantiate separator with computed dims
-        self.separator: SubModule = instantiate(separator,input_dim=sep_input_dim, output_dim=sep_output_dim)
+        self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim)
 
     def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
@@ -136,27 +139,27 @@ class TasNet(nn.Module):
         left, right = mixture[:, 0], mixture[:, 1]
 
         # Encode each channel
-        enc_left = self.encoder(left)    # [B, D, T_frames]
+        enc_left = self.encoder(left)  # [B, D, T_frames]
         enc_right = self.encoder(right)  # [B, D, T_frames]
 
         # Compute spatial features on padded signals
-        sp_feats = self.compute_spatial_features(left, right)             # [B, 3F, T_frames]
+        sp_feats = self.compute_spatial_features(left, right)  # [B, 3F, T_frames]
 
         # Fuse features channel-wise
         fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
 
         # Estimate masks
-        masks = self.separator(fused)   # [B, 2D, T_frames]
+        masks = self.separator(fused)  # [B, 2D, T_frames]
         mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
 
         # Apply masks and decode
-        outL = self.decoder(mL * enc_left)   # [B, 1, T_padded]
+        outL = self.decoder(mL * enc_left)  # [B, 1, T_padded]
         outR = self.decoder(mR * enc_right)  # [B, 1, T_padded]
 
         # Remove padding to recover original length
         hop = self.stft_hop
         start, end = hop, -(rest + hop)
-        left_out = outL[:, :, start:end].squeeze(1)   # [B, T]
+        left_out = outL[:, :, start:end].squeeze(1)  # [B, T]
         right_out = outR[:, :, start:end].squeeze(1)  # [B, T]
 
         return left_out, right_out

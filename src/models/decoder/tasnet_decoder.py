@@ -1,5 +1,7 @@
 import torch
 from torch import nn
+
+from src.helpers import ms_to_samples
 from src.models.submodules import SubModule
 
 
@@ -13,13 +15,13 @@ class TasNetDecoder(SubModule):
       1) 1-D ConvTranspose1d from N channels back to 1 channel
       2) Overlap-add automatically handled by stride and padding
     """
-    def __init__(self,num_filters: int, filter_length: int, stride: int, causal: bool):
+    def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool):
         """
         Initialize the ConvTranspose1d layer for waveform reconstruction.
 
         Args:
             num_filters (int): Number of basis filters N (input channels).
-            filter_length (int): Length of each learned filter (kernel size).
+            filter_length_ms (int): Length of each learned filter (kernel size).
             stride (int): Hop size (must match encoder stride).
             causal (bool): If True, use causal padding (no future overlap).
         """
@@ -27,15 +29,17 @@ class TasNetDecoder(SubModule):
         super().__init__()
         self.num_filters = num_filters
         self.out_channels = 1
+        self.stride = ms_to_samples(stride_ms, sample_rate)  # stride in samples
+        self.filter_length = ms_to_samples(filter_length_ms, sample_rate)  # filter length in samples
 
         # padding ensures perfect overlap-add
         # causal: pad = L-stride; non-causal: symmetric padding = L//2
-        pad = filter_length - stride if causal else (filter_length // 2)
+        pad = self.filter_length - self.stride if causal else (self.filter_length // 2)
         self.deconv1d = nn.ConvTranspose1d(
             in_channels=self.num_filters,
             out_channels=self.out_channels,
-            kernel_size=filter_length,
-            stride=stride,
+            kernel_size=self.filter_length,
+            stride=self.stride,
             padding=pad,
             bias=False
         )

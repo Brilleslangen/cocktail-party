@@ -1,6 +1,7 @@
 defaults:
-  - training: default
   - model_arch: tasnet      # Architecture selection
+  - dataset: static         # Dataset selection
+  - training: default
 
   # Override architecture defaults | Null if not used
   - encoder:   null

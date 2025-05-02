@@ -1,11 +1,11 @@
 _target_: "src.models.tasnet.TasNet"
 _recursive_: false
 
+window_length_ms: 32.0      # STFT window length (512 samples @16 kHz)
+stride_ms: 2.0              # STFT hop length (32 samples @16 kHz)
+sample_rate: 48000          # sample rate
+
 defaults:
-  - /encoder: tasnet_encoder
-  - /separator: tcn
-  - /decoder: tasnet_decoder
-
-
-feature_dim: 512      # STFT window length (samples; 32 ms @16 kHz)
-stride: 32       # STFT hop length (samples; 2 ms @16 kHz)
+  - encoder: tasnet_encoder
+  - separator: tcn
+  - decoder: tasnet_decoder
