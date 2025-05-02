@@ -4,6 +4,7 @@ In order to generate the dataset you need:
 
 - Generate SparseLibriMix using:
     - SparseLibriMix repository: https://github.com/popcornell/SparseLibriMix/tree/master
+        - Use overlap = 1, you can adjust this later in generate_binaural.py.
     - LibriSpeech Clean Test Set: https://www.openslr.org/12
     - WHAM!: http://wham.whisper.ai/
 

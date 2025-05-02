@@ -250,3 +250,5 @@ fabric.properties
 
 # PyPI configuration file
 .pypirc
+
+data/
