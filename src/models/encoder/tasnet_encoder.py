@@ -5,34 +5,68 @@ from src.models.submodules import SubModule
 
 class TasNetEncoder(SubModule):
     """
-    Time-domain analysis filterbank as in Conv-TasNet:
-      1) 1-D Conv (1→N filters)
-      2) Non-negative activation (ReLU)
-    See Luo & Mesgarani
-    """
+    Time-domain analysis filterbank (Conv-TasNet encoder).
 
+    Performs:
+      1) 1-D convolution to project raw waveform into N-dimensional feature space
+      2) Non-negative activation via ReLU to enforce positivity
+    """
     def __init__(self, num_filters: int, filter_length: int, stride: int, causal: bool):
+        """
+        Initialize the Conv1d encoder.
+
+        Args:
+            num_filters (int): Number of learned basis filters N.
+            filter_length (int): Length of each filter (in samples).
+            stride (int): Hop size between filters (in samples).
+            causal (bool): If True, use causal padding (no future context).
+        """
+        # Initialize base classes
         super().__init__()
+
+        # Input is always single-channel waveform
         self.in_channels = 1
         self.num_filters = num_filters
-        padding = filter_length - stride if causal else (filter_length // 2)
-        self.conv1d = nn.Conv1d(1, num_filters, kernel_size=filter_length,
-                                stride=stride, padding=padding, bias=False)
+
+        # Determine padding: causal vs non-causal
+        pad = filter_length - stride if causal else (filter_length // 2)
+
+        # 1-D convolution: [B, 1, T] → [B, N, T_frames]
+        self.conv1d = nn.Conv1d(
+            in_channels=self.in_channels,
+            out_channels=self.num_filters,
+            kernel_size=filter_length,
+            stride=stride,
+            padding=pad,
+            bias=False
+        )
+
+        # Activation to enforce non-negativity
         self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        x: [B,  T] or [B, 1, T]
-        returns: [B, N, T_frames]
+        Forward pass through encoder.
+
+        Args:
+            x (torch.Tensor): Input waveform of shape [B, T] or [B, 1, T].
+
+        Returns:
+            torch.Tensor: Encoded features [B, N, T_frames], where
+                T_frames = floor((T + 2*pad - (filter_length-1) -1)/stride) + 1
         """
+        # Ensure shape is [B, 1, T]
         if x.dim() == 2:
-            x = x.unsqueeze(1)  # [B,1,T]
-        w = self.conv1d(x)  # [B,N,T']
-        w = self.relu(w)  # enforce non-negativity
-        return w
+            x = x.unsqueeze(1)
+
+        # Convolution + ReLU
+        out = self.conv1d(x)  # [B, N, T_frames]
+        return self.relu(out)
 
     def get_input_dim(self) -> int:
+        """Return the number of input channels (always 1)."""
         return self.in_channels
 
     def get_output_dim(self) -> int:
+        """Return the number of output channels (num_filters)."""
         return self.num_filters

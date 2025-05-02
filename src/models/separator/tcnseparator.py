@@ -5,160 +5,209 @@ from src.models.submodules import SubModule
 
 
 class TCNSeparator(SubModule):
-    def __init__(self, input_dim, output_dim, bn_dim, hidden_dim,
-                 num_layers, num_stacks, kernel_size, skip_connection,
-                 causal, dilated):
-        super(TCNSeparator, self).__init__()
+    """
+    Temporal Convolutional Network separator for binaural feature streams.
 
-        # input is a sequence of features of shape (B, N, L)
+    Args:
+        input_dim (int): Number of input channels (2D + 3F fused features).
+        output_dim (int): Number of output channels (2 D, for two speaker masks).
+        bn_dim (int): Bottleneck channel dimension for TCN blocks.
+        hidden_dim (int): Hidden channel dimension in depthwise conv blocks.
+        num_layers (int): Number of conv blocks per stack.
+        num_stacks (int): Number of repeated TCN stacks.
+        kernel_size (int): Kernel size for depthwise convolutions.
+        skip_connection (bool): Whether to use residual skip outputs.
+        causal (bool): Use causal convolutions (no future context).
+        dilated (bool): Use exponentially dilated convolutions.
+    """
+    def __init__(self, input_dim: int, output_dim: int, bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int,
+                 kernel_size: int, skip_connection: bool, causal: bool, dilated: bool):
+        super().__init__()
+
+        # Store dims
         self.input_dim = input_dim
         self.output_dim = output_dim
-
-        # normalization
-        self.LN = cLN(input_dim, eps=1e-8) if causal else nn.GroupNorm(1, input_dim, eps=1e-8)
-        self.BN = nn.Conv1d(input_dim, bn_dim, 1, bias=False)  # Bias in cLN already
-
-        # TCN for feature extraction
         self.receptive_field = 0
         self.dilated = dilated
-
-        self.TCN = nn.ModuleList([])
-        for s in range(num_stacks):
-            for i in range(num_layers):
-                if self.dilated:
-                    self.TCN.append(DepthConv1d(bn_dim, hidden_dim, kernel_size, dilation=2 ** i, padding=2 ** i,
-                                                skip=skip_connection,
-                                                causal=causal))
-                else:
-                    self.TCN.append(
-                        DepthConv1d(bn_dim, hidden_dim, kernel_size, dilation=1, padding=1, skip=skip_connection,
-                                    causal=causal))
-                if i == 0 and s == 0:
-                    self.receptive_field += kernel_size
-                else:
-                    if self.dilated:
-                        self.receptive_field += (kernel_size - 1) * 2 ** i
-                    else:
-                        self.receptive_field += (kernel_size - 1)
-
-        # print("Receptive field: {:3d} frames.".format(self.receptive_field))
-
-        # output layer
-        self.output = nn.Sequential(nn.PReLU(),
-                                    nn.Conv1d(bn_dim, output_dim, 1)
-                                    )
-
         self.skip = skip_connection
 
-    def forward(self, x):
-        # input shape: (B, N, L)
+        # Normalization and bottleneck 1x1 conv
+        self.LN = cLN(input_dim) if causal else nn.GroupNorm(1, input_dim, eps=1e-8)
+        self.BN = nn.Conv1d(input_dim, bn_dim, kernel_size=1, bias=False)
 
-        # normalization
-        output = self.BN(self.LN(x))
+        # Build TCN: num_stacks × num_layers of DepthConv1d
+        self.TCN = nn.ModuleList()
+        for s in range(num_stacks):
+            for i in range(num_layers):
+                dilation = 2 ** i if dilated else 1
+                padding  = dilation * (kernel_size - 1) if dilated else (kernel_size // 2)
+                block = DepthConv1d(
+                    bn_dim, hidden_dim, kernel_size,
+                    padding=padding,
+                    dilation=dilation,
+                    skip=skip_connection,
+                    causal=causal
+                )
+                # Track total receptive field in frames
+                self.receptive_field += (kernel_size - 1) * dilation if (i or s) else kernel_size
+                self.TCN.append(block)
 
-        # pass to TCN
+        # Final 1x1 conv to project back to output_dim channels
+        self.output = nn.Sequential(
+            nn.PReLU(),
+            nn.Conv1d(bn_dim, output_dim, kernel_size=1)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the TCN separator.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch, input_dim, time].
+
+        Returns:
+            torch.Tensor: Output tensor of shape [batch, output_dim, time].
+        """
+        # Initial normalization + bottleneck
+        f = self.BN(self.LN(x))  # [B, bn_dim, T]
+
+        # Pass through TCN blocks, accumulating skip connections if enabled
         if self.skip:
-            skip_connection = 0.
-            for i in range(len(self.TCN)):
-                residual, skip = self.TCN[i](output)
-                output = output + residual
-                skip_connection = skip_connection + skip
+            skip_sum = 0.0
+            for block in self.TCN:
+                res, skip = block(f)
+                f = f + res
+                skip_sum = skip_sum + skip
+            f = skip_sum
         else:
-            for i in range(len(self.TCN)):
-                residual = self.TCN[i](output)
-                output = output + residual
+            for block in self.TCN:
+                res = block(f)
+                f = f + res
 
-        # output layer
-        if self.skip:
-            output = self.output(skip_connection)
-        else:
-            output = self.output(output)
-
-        return output
+        # Final output projection
+        return self.output(f)
 
     def get_input_dim(self) -> int:
+        """Return the expected input channel dimension."""
         return self.input_dim
 
     def get_output_dim(self) -> int:
+        """Return the output channel dimension (2×D masks)."""
         return self.output_dim
 
 
 class DepthConv1d(nn.Module):
+    """
+    Single depthwise separable convolution block with optional skip/residual.
 
-    def __init__(self, input_channel, hidden_channel, kernel, padding, dilation=1, skip=True, causal=False):
-        super(DepthConv1d, self).__init__()
-
+    Args:
+        input_channel (int): Number of input channels.
+        hidden_channel (int): Number of channels in depthwise conv.
+        kernel (int): Kernel size.
+        padding (int): Padding size.
+        dilation (int): Dilation factor.
+        skip (bool): Include skip branch.
+        causal (bool): Truncate future context for causal conv.
+    """
+    def __init__(self, input_channel: int, hidden_channel: int, kernel: int, padding: int, dilation: int = 1,
+                 skip: bool = True, causal: bool = False):
+        super().__init__()
         self.causal = causal
         self.skip = skip
 
-        self.conv1d = nn.Conv1d(input_channel, hidden_channel, 1)
-        if self.causal:
-            self.padding = (kernel - 1) * dilation
-        else:
-            self.padding = padding
-        self.dconv1d = nn.Conv1d(hidden_channel, hidden_channel, kernel, dilation=dilation,
-                                 groups=hidden_channel,
-                                 padding=self.padding)
-        self.res_out = nn.Conv1d(hidden_channel, input_channel, 1)
+        # Pointwise conv + activation
+        self.conv1d = nn.Conv1d(input_channel, hidden_channel, kernel_size=1)
         self.nonlinearity1 = nn.PReLU()
+
+        # Depthwise conv
+        self.padding = (kernel - 1) * dilation if causal else padding
+        self.dconv1d = nn.Conv1d(
+            hidden_channel, hidden_channel,
+            kernel_size=kernel,
+            dilation=dilation,
+            groups=hidden_channel,
+            padding=self.padding
+        )
         self.nonlinearity2 = nn.PReLU()
-        if self.causal:
-            self.reg1 = cLN(hidden_channel, eps=1e-08)
-            self.reg2 = cLN(hidden_channel, eps=1e-08)
-        else:
-            self.reg1 = nn.GroupNorm(1, hidden_channel, eps=1e-08)
-            self.reg2 = nn.GroupNorm(1, hidden_channel, eps=1e-08)
 
-        if self.skip:
-            self.skip_out = nn.Conv1d(hidden_channel, input_channel, 1)
+        # Normalization after depthwise
+        self.reg1 = cLN(hidden_channel) if causal else nn.GroupNorm(1, hidden_channel, eps=1e-8)
+        self.reg2 = cLN(hidden_channel) if causal else nn.GroupNorm(1, hidden_channel, eps=1e-8)
 
-    def forward(self, input):
-        output = self.reg1(self.nonlinearity1(self.conv1d(input)))
+        # Residual and skip 1x1 convs
+        self.res_out  = nn.Conv1d(hidden_channel, input_channel, kernel_size=1)
+        if skip:
+            self.skip_out = nn.Conv1d(hidden_channel, input_channel, kernel_size=1)
+
+    def forward(self, x: torch.Tensor):
+        """
+        Forward through depthwise block.
+
+        Args:
+            x (torch.Tensor): [batch, input_channel, time]
+
+        Returns:
+            (residual, skip) or residual only if skip disabled:
+            residual (torch.Tensor): [batch, input_channel, time]
+            skip     (torch.Tensor): [batch, input_channel, time]
+        """
+        # 1) pointwise conv + norm
+        y = self.nonlinearity1(self.conv1d(x))
+
+        # 2) depthwise conv + norm
         if self.causal:
-            output = self.reg2(self.nonlinearity2(self.dconv1d(output)[:, :, :-self.padding]))
+            y = self.dconv1d(y)[:, :, :-self.padding]
         else:
-            output = self.reg2(self.nonlinearity2(self.dconv1d(output)))
-        residual = self.res_out(output)
+            y = self.dconv1d(y)
+        y = self.nonlinearity2(self.reg2(y))
+
+        # 3) residual
+        res = self.res_out(y)
         if self.skip:
-            skip = self.skip_out(output)
-            return residual, skip
-        else:
-            return residual
+            skip = self.skip_out(y)
+            return res, skip
+        return res
 
 
 class cLN(nn.Module):
-    def __init__(self, dimension, eps=1e-8, trainable=True):
-        super(cLN, self).__init__()
+    """
+    Cumulative LayerNorm along the time axis for causal processing.
 
+    Maintains running mean/var per frame to avoid peeking into the future.
+    """
+    def __init__(self, dimension: int, eps: float = 1e-8):
+        super().__init__()
         self.eps = eps
-        if trainable:
-            self.gain = nn.Parameter(torch.ones(1, dimension, 1))
-            self.bias = nn.Parameter(torch.zeros(1, dimension, 1))
-        else:
-            self.gain = Variable(torch.ones(1, dimension, 1), requires_grad=False)
-            self.bias = Variable(torch.zeros(1, dimension, 1), requires_grad=False)
+        self.gain = nn.Parameter(torch.ones(1, dimension, 1))
+        self.bias = nn.Parameter(torch.zeros(1, dimension, 1))
 
-    def forward(self, input):
-        # input size: (Batch, Freq, Time)
-        # cumulative mean for each time step
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x (torch.Tensor): [batch, channels, time]
+        Returns:
+            torch.Tensor: same shape, normalized causally per channel.
+        """
+        B, C, T = x.size()
+        # sum over channels → [B, T]
+        sum_ = x.sum(dim=1)
+        sum_sq = x.pow(2).sum(dim=1)
 
-        batch_size, channel, time_step = input.size()
+        # cumulative sums in time
+        cum_sum = torch.cumsum(sum_,     dim=1)
+        cum_sqsum = torch.cumsum(sum_sq,   dim=1)
 
-        step_sum = input.sum(1)  # B, T
-        step_pow_sum = input.pow(2).sum(1)  # B, T
-        cum_sum = torch.cumsum(step_sum, dim=1)  # B, T
-        cum_pow_sum = torch.cumsum(step_pow_sum, dim=1)  # B, T
+        # entry counts: [1, T], repeated per batch
+        cnt = torch.arange(C, C*(T+1), C, device=x.device, dtype=x.dtype)
+        cnt = cnt.unsqueeze(0).expand(B, T)
 
-        entry_cnt = torch.arange(channel, channel * (time_step + 1), channel, device=input.device,
-                                 dtype=input.dtype)  # shape [time_step]
-        entry_cnt = entry_cnt.unsqueeze(0).expand(batch_size, time_step)
+        # compute mean/var
+        mean = cum_sum / cnt
+        var = (cum_sqsum - 2*mean*cum_sum) / cnt + mean.pow(2)
+        std = (var + self.eps).sqrt()
 
-        cum_mean = cum_sum / entry_cnt  # B, T
-        cum_var = (cum_pow_sum - 2 * cum_mean * cum_sum) / entry_cnt + cum_mean.pow(2)  # B, T
-        cum_std = (cum_var + self.eps).sqrt()  # B, T
-
-        cum_mean = cum_mean.unsqueeze(1)
-        cum_std = cum_std.unsqueeze(1)
-
-        x = (input - cum_mean.expand_as(input)) / cum_std.expand_as(input)
-        return x * self.gain.expand_as(x).type(x.type()) + self.bias.expand_as(x).type(x.type())
+        # reshape & apply
+        mean = mean.unsqueeze(1)
+        std = std.unsqueeze(1)
+        norm = (x - mean) / std
+        return norm * self.gain + self.bias

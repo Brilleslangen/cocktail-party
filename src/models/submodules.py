@@ -4,7 +4,8 @@ from torch import nn
 
 class SubModule(ABC, nn.Module):
     def __init__(self):
-        super().__init__()
+        ABC.__init__(self)
+        nn.Module.__init__(self)
 
     @property
     @abstractmethod

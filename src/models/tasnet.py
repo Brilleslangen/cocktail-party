@@ -7,120 +7,156 @@ from src.models.submodules import SubModule
 
 
 class TasNet(nn.Module):
+    """
+    Binaural Conv-TasNet model with spatial feature fusion.
+
+    Separates a stereo mixture into left/right outputs by:
+      1) encoding each channel,
+      2) extracting interaural spatial features (ILD, cosIPD, sinIPD),
+      3) concatenating channels + spatial features,
+      4) running a separator to predict masks,
+      5) applying masks and decoding back to waveforms.
+    """
+
     def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, feature_dim: int,
-                 stft_stride: int, **kwargs: Any):
+                 stride: int, **kwargs: Any):
         super().__init__()
-        # instantiate enc/dec from their Hydra blocks
+        # -------------------------------------------------------------------
+        # Instantiate encoder and decoder from their Hydra configs
+        # -------------------------------------------------------------------
         self.encoder: SubModule = instantiate(encoder)
         self.decoder: SubModule = instantiate(decoder)
 
-        # STFT params
-        self.stft_window = feature_dim
-        self.stft_stride = stft_stride
+        # -------------------------------------------------------------------
+        # STFT parameters for spatial features
+        # -------------------------------------------------------------------
+        self.stft_window = feature_dim  # STFT window length (samples)
+        self.stft_hop = stride  # STFT hop length (samples)
+        self.register_buffer("stft_window_fn", torch.hann_window(self.stft_window))
 
-        # Compute separator input/output dimensions
-        D = self.encoder.get_output_dim()  # encoder channel dim
-        F = self.stft_window // 2 + 1  # freq‐bins from STFT
-        sep_input_dim = 2 * D + 3 * F  # left+right (2D) + spatial (3F)
+        # -------------------------------------------------------------------
+        # Compute separator's channel dimensions
+        # -------------------------------------------------------------------
+        D = self.encoder.get_output_dim()  # number of encoder filters
+        F = self.stft_window // 2 + 1  # number of STFT freq bins
+        sep_input_dim = 2 * D + 3 * F  # [left; right; spatial]
         sep_output_dim = 2 * D  # two masks of size D
 
-        print(f"Separator config: {separator}")
-        self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim)
+        # Instantiate separator with computed dims
+        self.separator: SubModule = instantiate(separator,input_dim=sep_input_dim, output_dim=sep_output_dim)
 
-    def pad_signal(self, mixture: torch.Tensor):
+    def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
-        mixture: [B, C, T] with C=1 or 2
+        Pads a mono or stereo waveform so its length aligns with encoder/STFT hops,
+        and adds context padding on both ends.
+
+        Args:
+            mixture (torch.Tensor): [batch, channels, time] where channels=1 or 2.
+
         Returns:
-          padded: [B, C, T + rest + 2*stride]
-          rest:   how many zeros were appended at the end (before the final stride-padding)
+            padded (torch.Tensor): [batch, channels, time + rest + 2*hop]
+            rest (int): number of zeros appended at the end before context padding.
         """
         B, C, T = mixture.shape
-        # pad “rest” so (T + rest) is divisible by win/stride
-        win, st = self.stft_window, self.stft_stride
-        rest = win - (st + T % win) % win
+        win, hop = self.stft_window, self.stft_hop
+
+        # Make (T + rest) divisible by window to align frames
+        rest = win - (hop + T % win) % win
         if rest > 0:
-            pad = mixture.new_zeros(B, C, rest)
-            mixture = torch.cat([mixture, pad], dim=2)
-        # pad an extra stride on both ends
-        pad_aux = mixture.new_zeros(B, C, st)
-        mixture = torch.cat([pad_aux, mixture, pad_aux], dim=2)
+            pad_end = mixture.new_zeros(B, C, rest)
+            mixture = torch.cat([mixture, pad_end], dim=2)
+
+        # Add extra hop-length padding on both start and end
+        pad_ctx = mixture.new_zeros(B, C, hop)
+        mixture = torch.cat([pad_ctx, mixture, pad_ctx], dim=2)
         return mixture, rest
 
     def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
         """
-        Extracts ILD, cosIPD, and sinIPD from binaural inputs.
-        Args:
-            left_waveform, right_waveform: [batch, time]
-        Returns:
-            spatial_feats: [batch, frames, 3 * freq_bins]
-        """
-        # 1) STFT transform
-        stft_left = torch.stft(left_waveform,
-                               n_fft=self.stft_window,
-                               hop_length=self.stft_stride,
-                               win_length=self.stft_window,
-                               return_complex=True)  # [B, F, T]
-        stft_right = torch.stft(right_waveform,
-                                n_fft=self.stft_window,
-                                hop_length=self.stft_stride,
-                                win_length=self.stft_window,
-                                return_complex=True)
+        Compute interaural spatial cues via STFT.
 
-        # 2) Magnitude & phase
+        Args:
+            left_waveform (torch.Tensor): [batch, time]
+            right_waveform (torch.Tensor): [batch, time]
+
+        Returns:
+            spatial_feats (torch.Tensor): [batch, 3*F, T_frames]
+                concatenated ILD, cos(IPD), and sin(IPD) features.
+        """
+        # 1) Short-time Fourier transforms
+        stft_left = torch.stft(
+            left_waveform,
+            n_fft=self.stft_window,
+            hop_length=self.stft_hop,
+            win_length=self.stft_window,
+            window=self.stft_window_fn,
+            return_complex=True
+        )  # [B, F, T]
+        stft_right = torch.stft(
+            right_waveform,
+            n_fft=self.stft_window,
+            hop_length=self.stft_hop,
+            win_length=self.stft_window,
+            window=self.stft_window_fn,
+            return_complex=True
+        )  # [B, F, T]
+
+        # 2) Magnitude and phase
         mag_left, phase_left = stft_left.abs(), torch.angle(stft_left)
         mag_right, phase_right = stft_right.abs(), torch.angle(stft_right)
 
         # 3) Interaural Level Difference (ILD)
-        ild = 10 * (mag_left.log10() - mag_right.log10())  # [B, F, T]
+        ild = 10.0 * (mag_left.log10() - mag_right.log10())  # [B, F, T]
 
-        # 4) Interaural Phase Difference (IPD) -> cos & sin
+        # 4) Interaural Phase Difference (IPD) => cos & sin
         ipd = phase_left - phase_right
-        cos_ipd = torch.cos(ipd)  # [B, F, T]
+        cos_ipd = torch.cos(ipd)
         sin_ipd = torch.sin(ipd)
 
-        # 5) Stack and reshape: [B, T, 3*F]
-        #    Permute to time-major then flatten freq features
-        batch, freq_bins, frames = ild.shape
+        # 5) Stack along frequency/time then convert to channel-first
         ild_t = ild.permute(0, 2, 1)  # [B, T, F]
         cos_t = cos_ipd.permute(0, 2, 1)  # [B, T, F]
         sin_t = sin_ipd.permute(0, 2, 1)  # [B, T, F]
+        stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)  # [B, T, 3F]
+        return stacked.permute(0, 2, 1)  # [B, 3F, T]
 
-        # stack into time-major then swap to channels-first:
-        spatial_feats = torch.cat([ild_t, cos_t, sin_t], dim=-1)  # [B, T, 3F]
-        return spatial_feats.permute(0, 2, 1)  # [B, 3F, T]
-
-    def forward(self, padded_mixture: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
+        Forward pass through the binaural TasNet.
+
         Args:
-            padded_mixture: [batch, 2, time_samples]
+            mixture (torch.Tensor): [batch, 2, time_samples]
+
         Returns:
-            (left_out, right_out) for binaural
-            or mono_out if mono_fallback=True
+            left_out (torch.Tensor): [batch, time_samples]
+            right_out (torch.Tensor): [batch, time_samples]
         """
-        padded_mixture, rest = self.pad_signal(padded_mixture)  # [B, C, T]
-        left_input, right_input = padded_mixture[:, 0], padded_mixture[:, 1]
+        # Pad for alignment
+        mixture, rest = self.pad_signal(mixture)
+        left, right = mixture[:, 0], mixture[:, 1]
 
-        # Preprocess
-        encoded_left = self.encoder(left_input)
-        encoded_right = self.encoder(right_input)
-        spatial_feats = self.compute_spatial_features(left_input, right_input)
+        # Encode each channel
+        enc_left = self.encoder(left)    # [B, D, T_frames]
+        enc_right = self.encoder(right)  # [B, D, T_frames]
 
-        # Fusion: [left; right; spatial]
-        fused_input = torch.cat([encoded_left,
-                                 encoded_right,
-                                 spatial_feats],
-                                dim=1)  # [B, frames, 2D + 3F]p
+        # Compute spatial features on padded signals
+        sp_feats = self.compute_spatial_features(left, right)             # [B, 3F, T_frames]
 
-        # Produce isolation masks for left/right channels
-        mask_estimates = self.separator(fused_input)   # [Batch, 2*Channel_dim, Time]
-        mask_left, mask_right = mask_estimates.chunk(2, dim=1)  # each [B, frames, D]
+        # Fuse features channel-wise
+        fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
 
-        # Apply masks to encoded features
-        masked_left = mask_left * encoded_left
-        masked_right = mask_right * encoded_right
+        # Estimate masks
+        masks = self.separator(fused)   # [B, 2D, T_frames]
+        mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
 
-        # Decode to time-domain waveforms and unpad.
-        left_output = self.decoder(masked_left)[:, :, self.stft_stride:-(rest+self.stft_stride)].squeeze(1)  # [B, T]
-        right_output = self.decoder(masked_right)[:, :, self.stft_stride:-(rest+self.stft_stride)].squeeze(1)  # [B, T]
+        # Apply masks and decode
+        outL = self.decoder(mL * enc_left)   # [B, 1, T_padded]
+        outR = self.decoder(mR * enc_right)  # [B, 1, T_padded]
 
-        return left_output, right_output
+        # Remove padding to recover original length
+        hop = self.stft_hop
+        start, end = hop, -(rest + hop)
+        left_out = outL[:, :, start:end].squeeze(1)   # [B, T]
+        right_out = outR[:, :, start:end].squeeze(1)  # [B, T]
+
+        return left_out, right_out

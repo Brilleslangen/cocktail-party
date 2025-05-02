@@ -8,4 +8,4 @@ defaults:
 
 
 feature_dim: 512      # STFT window length (samples; 32 ms @16 kHz)
-stft_stride: 32       # STFT hop length (samples; 2 ms @16 kHz)
+stride: 32       # STFT hop length (samples; 2 ms @16 kHz)
