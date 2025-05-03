@@ -15,7 +15,7 @@ class BucketBatchSampler(Sampler[list[int]]):
         n_buckets (int): number of equal-width length‐based buckets.
         shuffle (bool): whether to shuffle order of buckets and samples.
     """
-    def __init__(self, lengths, batch_size, n_buckets=10, shuffle=True):
+    def __init__(self, lengths, batch_size, n_buckets, shuffle=True):
         super().__init__()
         self.lengths = lengths
         self.batch_size = batch_size
@@ -23,13 +23,17 @@ class BucketBatchSampler(Sampler[list[int]]):
 
         # assign each idx into one of n_buckets based on length
         min_len, max_len = min(lengths), max(lengths)
-        bucket_width = (max_len - min_len) / n_buckets
-        self.buckets = [[] for _ in range(n_buckets)]
-        for idx, L in enumerate(lengths):
-            # compute bucket index
-            b = int((L - min_len) / bucket_width)
-            b = min(b, n_buckets - 1)
-            self.buckets[b].append(idx)
+        if max_len == min_len:
+            # everyone the same length → single bucket
+            self.buckets = [list(range(len(lengths)))]
+        else:
+            bucket_width = (max_len - min_len) / n_buckets
+            self.buckets = [[] for _ in range(n_buckets)]
+            for idx, L in enumerate(lengths):
+                # compute bucket index
+                b = int((L - min_len) / bucket_width)
+                b = min(b, n_buckets - 1)
+                self.buckets[b].append(idx)
 
         # precompute batches for each bucket
         self.batched_idxs = []

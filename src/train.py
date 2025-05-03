@@ -1,6 +1,7 @@
 import torch
 import torchaudio
 import hydra
+from tqdm import trange, tqdm
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch import nn
@@ -11,10 +12,15 @@ from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
 
 
-# TODO: Check training loop with dataset.
-# TODO: Check if what loss should be used. Currently using MSELoss.
+# TODO: Check training loop with full dataset.
+# TODO: Check what loss should be used. Currently using MSELoss.
 # TODO: Connect wandb for logging.
 # TODO: Add naming scheme for the model. Use hydra -> set name property in yaml or use model name + dataset.
+# TODO: Create a function to calculate model size (num params).
+# TODO: Need 40000, 10000, and 6000 audio samples for training, validation, and test sets respectively, to replicate
+#  main relevant work (Han et. al 2021: research/papers/system architecture/binaural speech separation).
+# TODO: Establish what metrics we need, see if we can use the ones from the original paper. Also I think we should
+#  develop a timer_metric that averages in-to-out time during validation. Less than 10<ms is the goal.
 
 def setup_dataloaders(cfg: DictConfig):
     """
@@ -67,7 +73,8 @@ def train_epoch(model: nn.Module,
     model.train()
     total_loss = 0.0
 
-    for mix, refL, refR, lengths in loader:
+    progress_bar = tqdm(loader, desc="Train", leave=False)
+    for mix, refL, refR, lengths in progress_bar:
         mix, refL, refR = (mix.to(device),
                            refL.to(device),
                            refR.to(device))
@@ -108,7 +115,9 @@ def validate_epoch(model: nn.Module,
     model.eval()
     total_loss = 0.0
     with torch.no_grad():
-        for mix, refL, refR, lengths in loader:
+
+        progress_bar = tqdm(loader, desc="Validate", leave=False)
+        for mix, refL, refR, lengths in progress_bar:
             mix, refL, refR = (mix.to(device),
                                refL.to(device),
                                refR.to(device))
@@ -131,17 +140,15 @@ def validate_epoch(model: nn.Module,
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
 def main(cfg: DictConfig):
-    # 1) print and save the config
     print(OmegaConf.to_yaml(cfg))
-
-    # 2) set device
     device = torch.device(select_device())
+    torch.manual_seed(cfg.training.params.seed)
 
     # 3) build model, optimizer, scheduler, loss
     model = instantiate(cfg.model_arch).to(device)
     optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
     scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
-    criterion = nn.MSELoss(reduction="none")
+    criterion = instantiate(cfg.training.criterion).to(device)
 
     # 4) dataloaders
     train_loader, val_loader = setup_dataloaders(cfg)
@@ -152,7 +159,7 @@ def main(cfg: DictConfig):
         val_loss = validate_epoch(model, val_loader, criterion, device)
 
         scheduler.step(val_loss)
-        print(f"Epoch {epoch: 2d}  train_loss={train_loss: .4f}  val_loss={val_loss: .4f}")
+        print(f"Epoch {epoch: 2d} train_loss={train_loss: .4f} val_loss={val_loss: .4f}")
 
         # checkpoint best
         if val_loss < best_val:

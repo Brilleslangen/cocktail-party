@@ -1,7 +1,7 @@
 train:
-  mixture: "../datasets/static/train/mixtures"
+  mixture: "../datasets/static/train/mixture"
   clean: "../datasets/static/train/clean"
 
 val:
-  mixture: "../datasets/static/val/mixtures"
+  mixture: "../datasets/static/val/mixture"
   clean: "../datasets/static/val/clean"

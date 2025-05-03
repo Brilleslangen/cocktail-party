@@ -17,3 +17,7 @@ scheduler:
   T_0:       ${training.params.max_epochs}   # one full cosine cycle per epoch
   T_mult:    1
   eta_min:   1e-6
+
+criterion:
+  _target_: "torch.nn.MSELoss"
+  reduction: "none"
