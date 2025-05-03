@@ -11,6 +11,11 @@ from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
 
 
+# TODO: Check training loop with dataset.
+# TODO: Check if what loss should be used. Currently using MSELoss.
+# TODO: Connect wandb for logging.
+# TODO: Add naming scheme for the model. Use hydra -> set name property in yaml or use model name + dataset.
+
 def setup_dataloaders(cfg: DictConfig):
     """
     Build train and val DataLoaders with bucketing and padding.
@@ -158,11 +163,10 @@ def main(cfg: DictConfig):
                 "epoch": epoch,
                 "cfg": OmegaConf.to_container(cfg),
             }
-            torch.save(ckpt, "best_model.pt")
+            torch.save(ckpt, "outputs/<name>best_model.pt")
 
     print("Training complete. Best val loss:", best_val)
 
 
 if __name__ == "__main__":
     main()
-
