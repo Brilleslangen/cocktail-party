@@ -5,3 +5,7 @@ train:
 val:
   mixture: "../datasets/static/val/mixture"
   clean: "../datasets/static/val/clean"
+
+test:
+    mixture: "../datasets/static/test/mixture"
+    clean: "../datasets/static/test/clean"
