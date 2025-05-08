@@ -22,7 +22,7 @@ from src.data.bucket_sampler import BucketBatchSampler
 # TODO: Establish what metrics we need, see if we can use the ones from the original paper. Also I think we should
 #  develop a timer_metric that averages in-to-out time during validation. Less than 10<ms is the goal.
 
-def setup_dataloaders(cfg: DictConfig):
+def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     """
     Build train and val DataLoaders with bucketing and padding.
     """
@@ -151,7 +151,7 @@ def main(cfg: DictConfig):
     criterion = instantiate(cfg.training.criterion).to(device)
 
     # 4) dataloaders
-    train_loader, val_loader = setup_dataloaders(cfg)
+    train_loader, val_loader = setup_train_dataloaders(cfg)
 
     best_val = float("inf")
     for epoch in range(1, cfg.training.params.max_epochs + 1):
@@ -170,7 +170,7 @@ def main(cfg: DictConfig):
                 "epoch": epoch,
                 "cfg": OmegaConf.to_container(cfg),
             }
-            torch.save(ckpt, "outputs/<name>best_model.pt")
+            torch.save(ckpt, "outputs/model.pt")
 
     print("Training complete. Best val loss:", best_val)
 

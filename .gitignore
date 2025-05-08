@@ -254,4 +254,6 @@ fabric.properties
 # Custom
 outputs/
 .idea/
-./data/
+data/
+datasets/
+inference/
