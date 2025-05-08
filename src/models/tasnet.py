@@ -86,7 +86,9 @@ class TasNet(nn.Module):
             spatial_feats (torch.Tensor): [batch, 3*F, T_frames]
                 concatenated ILD, cos(IPD), and sin(IPD) features.
         """
-        # 1) Short-time Fourier transforms
+        eps = 1e-8  # small value to prevent log(0)
+
+        # 1) STFT
         stft_left = torch.stft(
             left_waveform,
             n_fft=self.stft_window,
@@ -104,23 +106,25 @@ class TasNet(nn.Module):
             return_complex=True
         )  # [B, F, T]
 
-        # 2) Magnitude and phase
-        mag_left, phase_left = stft_left.abs(), torch.angle(stft_left)
-        mag_right, phase_right = stft_right.abs(), torch.angle(stft_right)
+        # 2) Magnitude & Phase
+        mag_left = stft_left.abs() + eps
+        mag_right = stft_right.abs() + eps
+        phase_left = torch.angle(stft_left)
+        phase_right = torch.angle(stft_right)
 
-        # 3) Interaural Level Difference (ILD)
+        # 3) ILD (Interaural Level Difference)
         ild = 10.0 * (mag_left.log10() - mag_right.log10())  # [B, F, T]
 
-        # 4) Interaural Phase Difference (IPD) => cos & sin
+        # 4) IPD (Interaural Phase Difference)
         ipd = phase_left - phase_right
         cos_ipd = torch.cos(ipd)
         sin_ipd = torch.sin(ipd)
 
-        # 5) Stack along frequency/time then convert to channel-first
-        ild_t = ild.permute(0, 2, 1)  # [B, T, F]
-        cos_t = cos_ipd.permute(0, 2, 1)  # [B, T, F]
-        sin_t = sin_ipd.permute(0, 2, 1)  # [B, T, F]
-        stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)  # [B, T, 3F]
+        # 5) Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
+        ild_t = ild.permute(0, 2, 1)
+        cos_t = cos_ipd.permute(0, 2, 1)
+        sin_t = sin_ipd.permute(0, 2, 1)
+        stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)
         return stacked.permute(0, 2, 1)  # [B, 3F, T]
 
     def forward(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

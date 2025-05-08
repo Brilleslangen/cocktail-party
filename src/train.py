@@ -170,7 +170,7 @@ def main(cfg: DictConfig):
                 "epoch": epoch,
                 "cfg": OmegaConf.to_container(cfg),
             }
-            torch.save(ckpt, "outputs/<name>best_model.pt")
+            torch.save(ckpt, "outputs/model.pt")
 
     print("Training complete. Best val loss:", best_val)
 
