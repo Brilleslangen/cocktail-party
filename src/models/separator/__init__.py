@@ -1,4 +1,16 @@
 from .tcnseparator import TCNSeparator
-from .mambaseparator import MambaSeparator
+try:
+    from .mambaseparator import MambaSeparator
+except ImportError:
+    # If mamba_ssm is not installed, we can still use TCNSeparator
+    YELLOW = "\033[93m"  # bright yellow
+    RESET = "\033[0m"
+    print(
+        f"{YELLOW}Warning: MambaSeparator is not available. "
+        "Please install mamba_ssm if you wish to use it. "
+        f"Only available with NVIDIA GPUs.{RESET}\n"
+    )
+
+    pass
 
 __all__ = ["TCNSeparator", "MambaSeparator"]
