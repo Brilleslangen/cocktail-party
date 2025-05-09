@@ -1,0 +1,6 @@
+_target_: src.models.separator.MambaSeparator
+
+d_model: 256       # Input and output dimension (must match encoder output dim)
+d_state: 64        # State size for Mamba SSM
+d_conv: 4          # Local conv width
+expand: 2          # Expansion factor inside Mamba
