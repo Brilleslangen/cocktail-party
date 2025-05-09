@@ -21,6 +21,8 @@ from src.data.bucket_sampler import BucketBatchSampler
 #  main relevant work (Han et. al 2021: research/papers/system architecture/binaural speech separation).
 # TODO: Establish what metrics we need, see if we can use the ones from the original paper. Also I think we should
 #  develop a timer_metric that averages in-to-out time during validation. Less than 10<ms is the goal.
+# TODO: Make dataset use the huggingface datasets library. This will allow us to upload the dataset and enable
+#  streaming mode.
 
 def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     """
