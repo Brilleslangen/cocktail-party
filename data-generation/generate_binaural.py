@@ -11,9 +11,9 @@ sample_rate = 16000
 train_ratio = 0.8
 early_onset_ms = 0
 early_onset_samples = int(sample_rate * early_onset_ms / 1000)
-overlap_ratio = 1.0 # 0.0 = no overlap, 1.0 = full overlap
-snr_db = 10.0 # Signal-to-noise ratio in dB
-narrow_target_angle = False # Constrict az angle of target speaker
+overlap_ratio = 1.0  # 0.0 = no overlap, 1.0 = full overlap
+snr_db = 10.0  # Signal-to-noise ratio in dB
+narrow_target_angle = False  # Constrict az angle of target speaker
 
 # Path setup
 base_path = "../data/SparseLibriMix/output/sparse_2_1/wav16000"
@@ -46,13 +46,16 @@ num_train = int(train_ratio * num_total)
 train_indices = range(0, num_train)
 val_indices = range(num_train, num_total)
 
+
 def load_hrir(subject_id):
     path = os.path.join(hrtf_base, f"subject_{subject_id}/hrir_final.mat")
     data = scipy.io.loadmat(path)
     return data['hrir_l'], data['hrir_r']
 
+
 def pad_to(arr, length):
     return np.pad(arr, (0, length - len(arr)), mode='constant')
+
 
 def select_angles(is_target):
     if is_target:
@@ -63,6 +66,7 @@ def select_angles(is_target):
         el_idx = np.random.randint(0, len(elevations))
     return az_idx, el_idx
 
+
 def apply_snr(clean_signal, noise_signal, snr_db):
     clean_signal = pad_to(clean_signal, len(noise_signal))
     noise_signal = pad_to(noise_signal, len(clean_signal))
@@ -71,6 +75,7 @@ def apply_snr(clean_signal, noise_signal, snr_db):
     desired_noise_power = power_clean / (10 ** (snr_db / 10))
     scale = np.sqrt(desired_noise_power / (power_noise + 1e-9))
     return noise_signal * scale
+
 
 def process_sample(i, idx, hrir_subjects, out_dir, csv_writer):
     file = files[idx]
@@ -85,7 +90,7 @@ def process_sample(i, idx, hrir_subjects, out_dir, csv_writer):
     subject_id = random.choice(hrir_subjects)
     hrir_left, hrir_right = load_hrir(subject_id)
 
-    az_idx1, el_idx1 = select_angles(is_target=narrow_target_angle) # True for narrowing az of target speaker
+    az_idx1, el_idx1 = select_angles(is_target=narrow_target_angle)  # True for narrowing az of target speaker
     az_idx2, el_idx2 = select_angles(is_target=False)
     az1, el1 = azimuths[az_idx1], elevations[el_idx1]
     az2, el2 = azimuths[az_idx2], elevations[el_idx2]
@@ -141,6 +146,7 @@ def process_sample(i, idx, hrir_subjects, out_dir, csv_writer):
         target_speaker,
         subject_id
     ])
+
 
 # Train set
 with open(train_csv, 'w', newline='') as f:
