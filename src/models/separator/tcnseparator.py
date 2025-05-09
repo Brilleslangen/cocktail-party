@@ -20,6 +20,7 @@ class TCNSeparator(SubModule):
         causal (bool): Use causal convolutions (no future context).
         dilated (bool): Use exponentially dilated convolutions.
     """
+
     def __init__(self, input_dim: int, output_dim: int, bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int,
                  kernel_size: int, skip_connection: bool, causal: bool, dilated: bool):
         super().__init__()
@@ -40,7 +41,7 @@ class TCNSeparator(SubModule):
         for s in range(num_stacks):
             for i in range(num_layers):
                 dilation = 2 ** i if dilated else 1
-                padding  = dilation * (kernel_size - 1) if dilated else (kernel_size // 2)
+                padding = dilation * (kernel_size - 1) if dilated else (kernel_size // 2)
                 block = DepthConv1d(
                     bn_dim, hidden_dim, kernel_size,
                     padding=padding,
@@ -109,6 +110,7 @@ class DepthConv1d(nn.Module):
         skip (bool): Include skip branch.
         causal (bool): Truncate future context for causal conv.
     """
+
     def __init__(self, input_channel: int, hidden_channel: int, kernel: int, padding: int, dilation: int = 1,
                  skip: bool = True, causal: bool = False):
         super().__init__()
@@ -135,7 +137,7 @@ class DepthConv1d(nn.Module):
         self.reg2 = cLN(hidden_channel) if causal else nn.GroupNorm(1, hidden_channel, eps=1e-8)
 
         # Residual and skip 1x1 convs
-        self.res_out  = nn.Conv1d(hidden_channel, input_channel, kernel_size=1)
+        self.res_out = nn.Conv1d(hidden_channel, input_channel, kernel_size=1)
         if skip:
             self.skip_out = nn.Conv1d(hidden_channel, input_channel, kernel_size=1)
 
@@ -175,6 +177,7 @@ class cLN(nn.Module):
 
     Maintains running mean/var per frame to avoid peeking into the future.
     """
+
     def __init__(self, dimension: int, eps: float = 1e-8):
         super().__init__()
         self.eps = eps
@@ -194,16 +197,16 @@ class cLN(nn.Module):
         sum_sq = x.pow(2).sum(dim=1)
 
         # cumulative sums in time
-        cum_sum = torch.cumsum(sum_,     dim=1)
-        cum_sqsum = torch.cumsum(sum_sq,   dim=1)
+        cum_sum = torch.cumsum(sum_, dim=1)
+        cum_sqsum = torch.cumsum(sum_sq, dim=1)
 
         # entry counts: [1, T], repeated per batch
-        cnt = torch.arange(C, C*(T+1), C, device=x.device, dtype=x.dtype)
+        cnt = torch.arange(C, C * (T + 1), C, device=x.device, dtype=x.dtype)
         cnt = cnt.unsqueeze(0).expand(B, T)
 
         # compute mean/var
         mean = cum_sum / cnt
-        var = (cum_sqsum - 2*mean*cum_sum) / cnt + mean.pow(2)
+        var = (cum_sqsum - 2 * mean * cum_sum) / cnt + mean.pow(2)
         std = (var + self.eps).sqrt()
 
         # reshape & apply
