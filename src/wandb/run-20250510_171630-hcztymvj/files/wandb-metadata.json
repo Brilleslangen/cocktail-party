@@ -1,0 +1,43 @@
+{
+  "os": "macOS-15.4.1-arm64-arm-64bit-Mach-O",
+  "python": "CPython 3.13.0",
+  "startedAt": "2025-05-10T15:16:30.349636Z",
+  "program": "/Users/nicolaisivesind/Desktop/Datateknologi/Master/cocktail-party/src/inference.py",
+  "codePath": "src/inference.py",
+  "git": {
+    "remote": "https://github.com/Brilleslangen/cocktail-party.git",
+    "commit": "abd3bffed0ecb3eb4409408701edcdeaf9e2b7d0"
+  },
+  "email": "nicolaiSivesind@gmail.com",
+  "root": "/Users/nicolaisivesind/Desktop/Datateknologi/Master/cocktail-party/src",
+  "host": "Nicolais-MacBook-Pro-2.local",
+  "executable": "/Users/nicolaisivesind/Desktop/Datateknologi/Master/cocktail-party/venv/bin/python",
+  "codePathLocal": "inference.py",
+  "cpu_count": 12,
+  "cpu_count_logical": 12,
+  "disk": {
+    "/": {
+      "total": "994662584320",
+      "used": "709329973248"
+    },
+    "/System/Volumes/Data": {
+      "total": "994662584320",
+      "used": "709329973248"
+    }
+  },
+  "memory": {
+    "total": "34359738368"
+  },
+  "cpu": {
+    "count": 12,
+    "countLogical": 12
+  },
+  "apple": {
+    "name": "Apple M2 Max",
+    "ecpuCores": 4,
+    "pcpuCores": 8,
+    "gpuCores": 30,
+    "memoryGb": 32,
+    "ramTotalBytes": "34359738368"
+  }
+}

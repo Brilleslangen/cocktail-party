@@ -7,3 +7,4 @@ torch==2.2.2
 torchaudio==2.2.2
 tqdm==4.67.1
 mamba-ssm==2.2.4
+wandb==0.19.11

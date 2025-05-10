@@ -1,0 +1,4 @@
+artifact:     "${name}:latest"
+local_checkpoint: "outputs/${name}.pt"
+input_audio:  "../datasets/static/val/clean/mixture_0000400.wav"
+output_audio: "../inference/separated_output.wav"

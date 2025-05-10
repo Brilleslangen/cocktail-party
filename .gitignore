@@ -256,4 +256,5 @@ outputs/
 .idea/
 data/
 datasets/
-inference/
+.inference/
+.wandb/

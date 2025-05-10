@@ -1,0 +1,111 @@
+_wandb:
+    value:
+        cli_version: 0.19.11
+        m: []
+        python_version: 3.13.0
+        t:
+            "1":
+                - 1
+                - 50
+                - 55
+            "3":
+                - 13
+                - 15
+                - 16
+                - 23
+                - 55
+            "4": 3.13.0
+            "5": 0.19.11
+            "8":
+                - 2
+                - 5
+            "10":
+                - 20
+            "12": 0.19.11
+            "13": darwin-arm64
+dataset:
+    value:
+        name: static
+        test:
+            clean: ../datasets/static/test/clean
+            mixture: ../datasets/static/test/mixture
+        train:
+            clean: ../datasets/static/train/clean
+            mixture: ../datasets/static/train/mixture
+        val:
+            clean: ../datasets/static/val/clean
+            mixture: ../datasets/static/val/mixture
+inference:
+    value:
+        artifact: '{''_target_'': ''src.models.separator.TCNSeparator'', ''bn_dim'': 64, ''hidden_dim'': 256, ''num_layers'': 7, ''num_stacks'': 5, ''kernel_size'': 3, ''skip_connection'': True, ''causal'': True, ''dilated'': True}tasnet:latest'
+        input_audio: ../datasets/static/val/clean/mixture_0000400.wav
+        local_checkpoint: 'outputs/{''_target_'': ''src.models.separator.TCNSeparator'', ''bn_dim'': 64, ''hidden_dim'': 256, ''num_layers'': 7, ''num_stacks'': 5, ''kernel_size'': 3, ''skip_connection'': True, ''causal'': True, ''dilated'': True}tasnet.pt'
+        output_audio: ../inference/separated_output.wav
+model_arch:
+    value:
+        _recursive_: false
+        _target_: src.models.tasnet.TasNet
+        decoder:
+            _target_: src.models.decoder.TasNetDecoder
+            causal: true
+            filter_length_ms: 4
+            num_filters: 256
+            sample_rate: 16000
+            stride_ms: 2
+        encoder:
+            _target_: src.models.encoder.TasNetEncoder
+            causal: true
+            filter_length_ms: 4
+            num_filters: 256
+            sample_rate: 16000
+            stride_ms: 2
+        feature_dim: 256
+        filter_length_ms: 4
+        name: tasnet
+        param_count: 1956237
+        sample_rate: 16000
+        separator:
+            _target_: src.models.separator.TCNSeparator
+            bn_dim: 64
+            causal: true
+            dilated: true
+            hidden_dim: 256
+            kernel_size: 3
+            num_layers: 7
+            num_stacks: 5
+            skip_connection: true
+        stride_ms: 2
+        window_length_ms: 32
+name:
+    value: '{''_target_'': ''src.models.separator.TCNSeparator'', ''bn_dim'': 64, ''hidden_dim'': 256, ''num_layers'': 7, ''num_stacks'': 5, ''kernel_size'': 3, ''skip_connection'': True, ''causal'': True, ''dilated'': True}tasnet'
+training:
+    value:
+        criterion:
+            _target_: torch.nn.MSELoss
+            reduction: none
+        optimizer:
+            _target_: torch.optim.AdamW
+            betas:
+                - 0.9
+                - 0.999
+            eps: 1e-08
+            lr: 0.001
+            weight_decay: 1e-05
+        params:
+            batch_size: 2
+            max_epochs: 5
+            n_buckets: 10
+            num_workers: 1
+            seed: 42
+        scheduler:
+            _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+            T_0: 5
+            T_mult: 1
+            eta_min: 1e-06
+wandb:
+    value:
+        enabled: true
+        entity: nicolaiogerlend
+        group: '{''_target_'': ''src.models.separator.TCNSeparator'', ''bn_dim'': 64, ''hidden_dim'': 256, ''num_layers'': 7, ''num_stacks'': 5, ''kernel_size'': 3, ''skip_connection'': True, ''causal'': True, ''dilated'': True}tasnet'
+        project: cocktail-party
+        tags: []

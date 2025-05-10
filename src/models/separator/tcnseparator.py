@@ -21,11 +21,12 @@ class TCNSeparator(SubModule):
         dilated (bool): Use exponentially dilated convolutions.
     """
 
-    def __init__(self, input_dim: int, output_dim: int, bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int,
+    def __init__(self, input_dim: int, output_dim: int, name: str, bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int,
                  kernel_size: int, skip_connection: bool, causal: bool, dilated: bool):
         super().__init__()
 
         # Store dims
+        self.name = name
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.receptive_field = 0

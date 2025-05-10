@@ -4,3 +4,5 @@ defaults:
   - training: default
 
   - override model_arch/separator: mamba
+
+name: ${model_arch.separator.name}${model_arch.name}
