@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torchaudio
 import hydra
@@ -200,7 +202,8 @@ def main(cfg: DictConfig):
         # checkpoint best
         if val_loss < best_val:
             best_val = val_loss
-            best_ckpt_path = f"outputs/{run_name}.pt"
+            best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
+            os.makedirs(os.path.dirname(best_ckpt_path), exist_ok=True)
             torch.save({
                 "model_state": model.state_dict(),
                 "opt_state": optimizer.state_dict(),

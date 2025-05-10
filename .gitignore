@@ -257,4 +257,6 @@ outputs/
 data/
 datasets/
 .inference/
-.wandb/
+wandb/
+!config/wandb/
+artifacts/
