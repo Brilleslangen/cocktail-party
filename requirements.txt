@@ -8,3 +8,4 @@ tqdm==4.67.1
 causal-conv1d==1.5.0.post8
 mamba-ssm==2.2.4
 torchaudio==2.0.1+cu118
+wandb==0.19.11

@@ -1,3 +1,5 @@
+name: "static"
+
 train:
   mixture: "../datasets/static/train/mixture"
   clean: "../datasets/static/train/clean"

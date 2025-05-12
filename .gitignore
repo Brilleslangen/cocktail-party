@@ -256,4 +256,7 @@ outputs/
 .idea/
 data/
 datasets/
-inference/
+.inference/
+wandb/
+!config/wandb/
+artifacts/

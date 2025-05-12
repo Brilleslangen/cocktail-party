@@ -1,0 +1,4 @@
+artifact: "conv-tasnet_1.96M:latest"
+local_checkpoint: "artifacts/${name}.pt"
+input_audio:  "../datasets/static/val/clean/test.wav"
+output_audio: "../inference/separated_output.wav"

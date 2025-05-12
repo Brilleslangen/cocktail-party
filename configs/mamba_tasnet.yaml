@@ -3,7 +3,6 @@ defaults:
   - dataset: static         # Dataset selection
   - training: default
 
-  # Override architecture defaults | Null if not used
-  - encoder:   null
-  - separator: mamba
-  - decoder:   null
+  - override model_arch/separator: mamba
+
+name: ${model_arch.separator.name}${model_arch.name}

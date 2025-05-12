@@ -12,9 +12,11 @@ class MambaSeparator(SubModule):
         d_model: int,
         d_state: int,
         d_conv: int,
-        expand: int
+        expand: int,
+        name: str
     ):
         super().__init__()
+        self.name = name
         self.input_dim = input_dim
         self.output_dim = output_dim
 

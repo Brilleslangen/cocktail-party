@@ -1,27 +1,30 @@
+import os
+
 import torch
 import torchaudio
 import hydra
+import wandb
 from tqdm import trange, tqdm
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch import nn
 from torch.utils.data import DataLoader
 from src.data.dataset import AudioDataset
-from src.helpers import select_device
+from src.helpers import select_device, count_parameters, prettify_param_count
 from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
 
 
-# TODO: Check training loop with full dataset.
-# TODO: Check what loss should be used. Currently using MSELoss.
-# TODO: Connect wandb for logging.
-# TODO: Add naming scheme for the model. Use hydra -> set name property in yaml or use model name + dataset.
-# TODO: Create a function to calculate model size (num params).
-# TODO: Need 40000, 10000, and 6000 audio samples for training, validation, and test sets respectively, to replicate
+# TODO:
+#  1. Check what loss should be used. Currently using MSELoss.
+#  2. Connect wandb for logging. Add wandb config to hydra config.
+#  3. Add naming scheme for the model. Use hydra -> set name property in yaml or use model name + dataset.
+#  4. Create a function to calculate model size (num params).
+#  5. Need 40000, 10000, and 6000 audio samples for training, validation, and test sets respectively, to replicate
 #  main relevant work (Han et. al 2021: research/papers/system architecture/binaural speech separation).
-# TODO: Establish what metrics we need, see if we can use the ones from the original paper. Also I think we should
+#  6. Establish what metrics we need, see if we can use the ones from the original paper. Also I think we should
 #  develop a timer_metric that averages in-to-out time during validation. Less than 10<ms is the goal.
-# TODO: Make dataset use the huggingface datasets library. This will allow us to upload the dataset and enable
+#  7. Make dataset use the huggingface datasets library. This will allow us to upload the dataset and enable
 #  streaming mode.
 
 def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
@@ -142,20 +145,44 @@ def validate_epoch(model: nn.Module,
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
 def main(cfg: DictConfig):
-    print(OmegaConf.to_yaml(cfg))
     device = torch.device(select_device())
     torch.manual_seed(cfg.training.params.seed)
 
-    # 3) build model, optimizer, scheduler, loss
+    # build model, optimizer, scheduler, loss
     model = instantiate(cfg.model_arch).to(device)
     optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
     scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
     criterion = instantiate(cfg.training.criterion).to(device)
 
-    # 4) dataloaders
+    # Calculate composite figures and init wandb
+    param_count = count_parameters(model)
+    pretty_param_count = prettify_param_count(param_count)
+    run_name = f"{cfg.name}_{pretty_param_count}"
+
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    cfg_dict["model_arch"]["param_count"] = param_count
+
+    if cfg.wandb.enabled:
+        wandb.init(
+            project=cfg.wandb.project,
+            entity=cfg.wandb.entity,
+            group=cfg.wandb.group,
+            tags=cfg.wandb.tags,
+            job_type='train',
+            config=cfg_dict,
+            name=run_name,
+            reinit='finish_previous'
+        )
+        wandb.run.summary["model/param_count"] = param_count
+
+    print(OmegaConf.to_yaml(cfg))
+
+    # dataloaders
     train_loader, val_loader = setup_train_dataloaders(cfg)
 
     best_val = float("inf")
+    best_ckpt_path = None
+
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
         val_loss = validate_epoch(model, val_loader, criterion, device)
@@ -163,16 +190,33 @@ def main(cfg: DictConfig):
         scheduler.step(val_loss)
         print(f"Epoch {epoch: 2d} train_loss={train_loss: .4f} val_loss={val_loss: .4f}")
 
+        # log to wandb
+        if cfg.wandb.enabled:
+            wandb.log({
+                "epoch": epoch,
+                "train/loss": train_loss,
+                "val/loss": val_loss,
+                "learning_rate": optimizer.param_groups[0]["lr"],
+            }, step=epoch)
+
         # checkpoint best
         if val_loss < best_val:
             best_val = val_loss
-            ckpt = {
+            best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
+            os.makedirs(os.path.dirname(best_ckpt_path), exist_ok=True)
+            torch.save({
                 "model_state": model.state_dict(),
                 "opt_state": optimizer.state_dict(),
                 "epoch": epoch,
-                "cfg": OmegaConf.to_container(cfg),
-            }
-            torch.save(ckpt, "outputs/model.pt")
+                "cfg": cfg_dict,
+            }, best_ckpt_path)
+
+    # upload file if W&B is enabled
+    if cfg.wandb.enabled and best_ckpt_path is not None:
+        wandb.run.summary["best/val_loss"] = best_val
+        art = wandb.Artifact(run_name, type="model")
+        art.add_file(best_ckpt_path)
+        wandb.log_artifact(art)
 
     print("Training complete. Best val loss:", best_val)
 

@@ -1,7 +1,7 @@
 params:
   batch_size:   2
   num_workers:  1
-  max_epochs:  5
+  max_epochs:  1
   n_buckets:   10
   seed:        42
 
@@ -21,3 +21,5 @@ scheduler:
 criterion:
   _target_: "torch.nn.MSELoss"
   reduction: "none"
+
+model_save_dir: "artifacts"
