@@ -16,7 +16,7 @@ class BucketBatchSampler(Sampler[list[int]]):
         shuffle (bool): whether to shuffle order of buckets and samples.
     """
     def __init__(self, lengths, batch_size, n_buckets, shuffle=True):
-        super().__init__()
+        super().__init__(data_source = None)
         self.lengths = lengths
         self.batch_size = batch_size
         self.shuffle = shuffle
