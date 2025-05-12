@@ -13,13 +13,15 @@ from src.data.dataset import AudioDataset
 from src.helpers import select_device, count_parameters, prettify_param_count
 from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
+from torchmetrics.functional.audio import (
+    signal_noise_ratio,
+    scale_invariant_signal_distortion_ratio,
+    signal_distortion_ratio
+)
 
 
 # TODO:
 #  1. Check what loss should be used. Currently using MSELoss.
-#  2. Connect wandb for logging. Add wandb config to hydra config.
-#  3. Add naming scheme for the model. Use hydra -> set name property in yaml or use model name + dataset.
-#  4. Create a function to calculate model size (num params).
 #  5. Need 40000, 10000, and 6000 audio samples for training, validation, and test sets respectively, to replicate
 #  main relevant work (Han et. al 2021: research/papers/system architecture/binaural speech separation).
 #  6. Establish what metrics we need, see if we can use the ones from the original paper. Also I think we should
@@ -114,33 +116,76 @@ def validate_epoch(model: nn.Module,
                    criterion: nn.Module,
                    device: torch.device):
     """
-    Runs one full validation epoch over `loader`.
-    Returns the average loss.
+    Runs one validation epoch and returns average metrics:
+      - loss
+      - SNR
+      - SNR improvement (SNRi)
+      - SI-SNR (scale-invariant)
+      - SI-SNR improvement (SI-SNRi)  ← PRIMARY
     """
     model.eval()
-    total_loss = 0.0
+    totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i"]}
+    total_examples = 0
+
     with torch.no_grad():
-
-        progress_bar = tqdm(loader, desc="Validate", leave=False)
-        for mix, refL, refR, lengths in progress_bar:
-            mix, refL, refR = (mix.to(device),
-                               refL.to(device),
-                               refR.to(device))
-            lengths = lengths.to(device)
-
+        for mix, refL, refR, lengths in tqdm(loader, desc="Validate", leave=False):
+            # move everything to device
+            mix, refL, refR, lengths = (
+                mix.to(device),
+                refL.to(device),
+                refR.to(device),
+                lengths.to(device),
+            )
             if hasattr(model.separator, "reset_state"):
                 model.separator.reset_state(batch_size=mix.size(0))
-
             estL, estR = model(mix)
-            lossL = criterion(estL, refL)
-            lossR = criterion(estR, refR)
+
+            # compute masked loss
             max_T = refL.size(1)
-            mask = (torch.arange(max_T, device=device)[None, :] < lengths[:, None]).float()
-            loss = ((lossL + lossR) * mask).sum() / mask.sum()
+            mask = (torch.arange(max_T, device=device)[None] < lengths[:, None]).float()
+            loss = ((criterion(estL, refL) + criterion(estR, refR)) * mask).sum() / mask.sum()
 
-            total_loss += loss.item()
+            # bring to CPU for metrics
+            estL_c, estR_c = estL.cpu(), estR.cpu()
+            mixL_c, mixR_c = mix[:, 0, :].cpu(), mix[:, 1, :].cpu()
+            refL_c, refR_c = refL.cpu(), refR.cpu()
+            B = estL_c.size(0)
 
-    return total_loss / len(loader)
+            # SNR & SNRi
+            snr_L    = signal_noise_ratio(estL_c, refL_c)
+            snr_R    = signal_noise_ratio(estR_c, refR_c)
+            snr_est  = 0.5 * (snr_L + snr_R)
+            snr_mix  = 0.5 * (
+                signal_noise_ratio(mixL_c, refL_c) +
+                signal_noise_ratio(mixR_c, refR_c)
+            )
+            snr_i = snr_est - snr_mix
+
+            # SI-SNR & SI-SNRi
+            si_snr_L    = scale_invariant_signal_distortion_ratio(
+                             estL_c, refL_c, zero_mean=True)
+            si_snr_R    = scale_invariant_signal_distortion_ratio(
+                             estR_c, refR_c, zero_mean=True)
+            si_snr_est  = 0.5 * (si_snr_L + si_snr_R)
+            si_snr_mix  = 0.5 * (
+                scale_invariant_signal_distortion_ratio(mixL_c, refL_c, zero_mean=True) +
+                scale_invariant_signal_distortion_ratio(mixR_c, refR_c, zero_mean=True)
+            )
+            si_snr_i = si_snr_est - si_snr_mix
+
+            # accumulate
+            totals["loss"]     += loss.item() * B
+            totals["snr"]      += snr_est.sum().item()
+            totals["snr_i"]    += snr_i.sum().item()
+            totals["si_snr"]   += si_snr_est.sum().item()
+            totals["si_snr_i"] += si_snr_i.sum().item()
+            total_examples     += B
+
+    # average over all examples
+    for k in totals:
+        totals[k] /= total_examples
+    return totals
+
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
@@ -180,45 +225,54 @@ def main(cfg: DictConfig):
     # dataloaders
     train_loader, val_loader = setup_train_dataloaders(cfg)
 
-    best_val = float("inf")
-    best_ckpt_path = None
+    best_metric_name = "si_snr_i"
+    best_metric_value = -float("inf")
+    best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
 
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss = validate_epoch(model, val_loader, criterion, device)
+        val_stats = validate_epoch(model, val_loader, criterion, device)
 
-        scheduler.step(val_loss)
-        print(f"Epoch {epoch: 2d} train_loss={train_loss: .4f} val_loss={val_loss: .4f}")
+        scheduler.step(val_stats["loss"])
+        print(
+            f"Epoch {epoch:2d} "
+            f"train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} "
+            f"SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f}"
+        )
 
-        # log to wandb
         if cfg.wandb.enabled:
             wandb.log({
-                "epoch": epoch,
                 "train/loss": train_loss,
-                "val/loss": val_loss,
+                "val/loss": val_stats["loss"],
+                "val/SNR": val_stats["snr"],
+                "val/SNRi": val_stats["snr_i"],
+                "val/SI-SNR": val_stats["si_snr"],
+                "val/SI-SNRi": val_stats["si_snr_i"],
                 "learning_rate": optimizer.param_groups[0]["lr"],
             }, step=epoch)
 
         # checkpoint best
-        if val_loss < best_val:
-            best_val = val_loss
-            best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
+        current = val_stats[best_metric_name]
+        if current > best_metric_value:
+            best_metric_value = current
             os.makedirs(os.path.dirname(best_ckpt_path), exist_ok=True)
             torch.save({
-                "model_state": model.state_dict(),
-                "opt_state": optimizer.state_dict(),
                 "epoch": epoch,
                 "cfg": cfg_dict,
+                "model_state": model.state_dict(),
+                "opt_state": optimizer.state_dict(),
+                "sched_state": scheduler.state_dict(),
+                "val_stats": val_stats,
             }, best_ckpt_path)
 
-    # upload file if W&B is enabled
+    # upload the best‐metric model to W&B
     if cfg.wandb.enabled and best_ckpt_path is not None:
-        wandb.run.summary["best/val_loss"] = best_val
+        wandb.run.summary[f"best/{best_metric_name}"] = best_metric_value
         art = wandb.Artifact(run_name, type="model")
         art.add_file(best_ckpt_path)
         wandb.log_artifact(art)
 
-    print("Training complete. Best val loss:", best_val)
+    print(f"Training complete. Best {best_metric_name}: {best_metric_value:.4f}")
 
 
 if __name__ == "__main__":
