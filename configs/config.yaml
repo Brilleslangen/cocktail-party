@@ -1,8 +1,9 @@
 defaults:
+  - _self_
   - model_arch: tasnet      # Architecture selection
   - dataset: static         # Dataset selection
   - training: default
+  - wandb: default
+  - inference: default
 
-  - override model_arch/separator: mamba
-
-name: ${model_arch.separator.name}${model_arch.name}
+name: ${model_arch.separator.name}-${model_arch.name}

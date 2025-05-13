@@ -18,7 +18,7 @@ from typing import Any
 # add_safe_globals([ListConfig, ContainerMetadata, Any]) What is this?
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def run_inference(cfg: DictConfig):
     device = torch.device(select_device())
 

@@ -1,13 +1,4 @@
-name: "static"
+# Add datasets here after they are pushed to wandb as artifacts
+artifact_name: "static-2-spk-noise:latest"
+sample_rate: 16000
 
-train:
-  mixture: "../datasets/static/train/mixture"
-  clean: "../datasets/static/train/clean"
-
-val:
-  mixture: "../datasets/static/val/mixture"
-  clean: "../datasets/static/val/clean"
-
-test:
-    mixture: "../datasets/static/test/mixture"
-    clean: "../datasets/static/test/clean"

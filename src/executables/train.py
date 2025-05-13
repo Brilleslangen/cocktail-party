@@ -4,7 +4,7 @@ import torch
 import torchaudio
 import hydra
 import wandb
-from tqdm import trange, tqdm
+from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch import nn
@@ -13,7 +13,7 @@ from src.data.dataset import AudioDataset
 from src.helpers import select_device, count_parameters, prettify_param_count
 from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
-from src.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
+from src.helpers.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
 
 
 # TODO:
@@ -29,8 +29,13 @@ def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     """
     Build train and val DataLoaders with bucketing and padding.
     """
-    train_ds = AudioDataset(cfg.dataset.train, cfg.model_arch.sample_rate)
-    val_ds = AudioDataset(cfg.dataset.val, cfg.model_arch.sample_rate)
+    run = wandb.run
+    dataset_dir = run.use_artifact(cfg.dataset.artifact_name, type="dataset").download()
+    train_dir = os.path.join(dataset_dir, "train")
+    val_dir = os.path.join(dataset_dir, "val")
+
+    train_ds = AudioDataset(train_dir, cfg.model_arch.sample_rate)
+    val_ds = AudioDataset(val_dir, cfg.model_arch.sample_rate)
 
     # compute raw lengths (in samples) for bucketing
     train_lengths = [torchaudio.info(p).num_frames for p in train_ds.mix_files]
@@ -168,7 +173,7 @@ def validate_epoch(model: nn.Module,
     return totals
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def main(cfg: DictConfig):
     device = torch.device(select_device())
     torch.manual_seed(cfg.training.params.seed)
@@ -215,8 +220,7 @@ def main(cfg: DictConfig):
 
         scheduler.step(val_stats["loss"])
         print(
-            f"Epoch {epoch:2d} "
-            f"train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} "
+            f"\rEpoch{epoch:2d} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
             f"SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f}"
         )
 

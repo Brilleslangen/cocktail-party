@@ -258,5 +258,5 @@ data/
 datasets/
 .inference/
 wandb/
-!config/wandb/
+!configs/wandb/
 artifacts/

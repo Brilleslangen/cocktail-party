@@ -25,7 +25,7 @@ def test_model_pass(cfg):
     print(f"Test passed! Output shapes: left={left_out.shape}, right={right_out.shape}")
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def main(cfg: DictConfig):
     test_model_pass(cfg)
 
