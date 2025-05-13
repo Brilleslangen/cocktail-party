@@ -13,11 +13,7 @@ from src.data.dataset import AudioDataset
 from src.helpers import select_device, count_parameters, prettify_param_count
 from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
-from torchmetrics.functional.audio import (
-    signal_noise_ratio,
-    scale_invariant_signal_distortion_ratio,
-    signal_distortion_ratio
-)
+from src.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
 
 
 # TODO:
@@ -124,7 +120,7 @@ def validate_epoch(model: nn.Module,
       - SI-SNR improvement (SI-SNRi)  ← PRIMARY
     """
     model.eval()
-    totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i"]}
+    totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i", "si_sdr", "si_sdr_i"]}
     total_examples = 0
 
     with torch.no_grad():
@@ -151,41 +147,25 @@ def validate_epoch(model: nn.Module,
             refL_c, refR_c = refL.cpu(), refR.cpu()
             B = estL_c.size(0)
 
-            # SNR & SNRi
-            snr_L    = signal_noise_ratio(estL_c, refL_c)
-            snr_R    = signal_noise_ratio(estR_c, refR_c)
-            snr_est  = 0.5 * (snr_L + snr_R)
-            snr_mix  = 0.5 * (
-                signal_noise_ratio(mixL_c, refL_c) +
-                signal_noise_ratio(mixR_c, refR_c)
-            )
-            snr_i = snr_est - snr_mix
-
-            # SI-SNR & SI-SNRi
-            si_snr_L    = scale_invariant_signal_distortion_ratio(
-                             estL_c, refL_c, zero_mean=True)
-            si_snr_R    = scale_invariant_signal_distortion_ratio(
-                             estR_c, refR_c, zero_mean=True)
-            si_snr_est  = 0.5 * (si_snr_L + si_snr_R)
-            si_snr_mix  = 0.5 * (
-                scale_invariant_signal_distortion_ratio(mixL_c, refL_c, zero_mean=True) +
-                scale_invariant_signal_distortion_ratio(mixR_c, refR_c, zero_mean=True)
-            )
-            si_snr_i = si_snr_est - si_snr_mix
+            # compute
+            snr_est, snr_i = compute_SNR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
+            si_snr_est, si_snr_i = compute_SI_SNR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
+            si_sdr_est, si_sdr_i = compute_SI_SDR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
 
             # accumulate
-            totals["loss"]     += loss.item() * B
-            totals["snr"]      += snr_est.sum().item()
-            totals["snr_i"]    += snr_i.sum().item()
-            totals["si_snr"]   += si_snr_est.sum().item()
+            totals["loss"] += loss.item() * B
+            totals["snr"] += snr_est.sum().item()
+            totals["snr_i"] += snr_i.sum().item()
+            totals["si_snr"] += si_snr_est.sum().item()
             totals["si_snr_i"] += si_snr_i.sum().item()
-            total_examples     += B
+            totals["si_sdr"] += si_sdr_est.sum().item()
+            totals["si_sdr_i"] += si_sdr_i.sum().item()
+            total_examples += B
 
     # average over all examples
     for k in totals:
         totals[k] /= total_examples
     return totals
-
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="tasnet_baseline")
