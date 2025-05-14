@@ -11,7 +11,7 @@ from torch import nn
 from src.helpers import select_device
 
 # Allow OmegaConf to handle PyTorch types if needed
-from torch.serialization import add_safe_globals
+#from torch.serialization import add_safe_globals
 from omegaconf.listconfig import ListConfig
 from omegaconf.base import ContainerMetadata
 from typing import Any

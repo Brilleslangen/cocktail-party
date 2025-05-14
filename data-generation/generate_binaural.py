@@ -9,42 +9,61 @@ import random
 # Configuration
 sample_rate = 16000
 train_ratio = 0.8
+test_ratio = 0.1  # 10% test set
 early_onset_ms = 0
 early_onset_samples = int(sample_rate * early_onset_ms / 1000)
-overlap_ratio = 1.0  # 0.0 = no overlap, 1.0 = full overlap
-snr_db = 10.0  # Signal-to-noise ratio in dB
-narrow_target_angle = False  # Constrict az angle of target speaker
+overlap_ratio = 1.0
+snr_db = 10.0
+narrow_target_angle = False
 
-# Path setup
+# Paths
 base_path = "../data/SparseLibriMix/output/sparse_2_1/wav16000"
 input_dir_s1 = os.path.join(base_path, "s1")
 input_dir_s2 = os.path.join(base_path, "s2")
 noise_dir = os.path.join(base_path, "noise")
 
 output_root = "../datasets/static"
-train_dir, val_dir = os.path.join(output_root, "train"), os.path.join(output_root, "val")
+train_dir, val_dir, test_dir = (
+    os.path.join(output_root, "train"),
+    os.path.join(output_root, "val"),
+    os.path.join(output_root, "test")
+)
 train_mix_dir, train_clean_dir = os.path.join(train_dir, "mixture"), os.path.join(train_dir, "clean")
 val_mix_dir, val_clean_dir = os.path.join(val_dir, "mixture"), os.path.join(val_dir, "clean")
+test_mix_dir, test_clean_dir = os.path.join(test_dir, "mixture"), os.path.join(test_dir, "clean")
+
 os.makedirs(train_mix_dir, exist_ok=True)
 os.makedirs(train_clean_dir, exist_ok=True)
 os.makedirs(val_mix_dir, exist_ok=True)
 os.makedirs(val_clean_dir, exist_ok=True)
+os.makedirs(test_mix_dir, exist_ok=True)
+os.makedirs(test_clean_dir, exist_ok=True)
 
 train_csv = os.path.join(output_root, "train.csv")
 val_csv = os.path.join(output_root, "val.csv")
+test_csv = os.path.join(output_root, "test.csv")
 
+# HRIR Subject setup
 hrtf_base = "../data/cipic-hrtf-database/standard_hrir_database"
+
 train_subjects = ['003', '008', '011', '015', '020', '033', '048', '051', '060', '126']
-val_subjects = ['009', '010', '012', '044', '059', '124', '135', '147', '154', '165']
+test_subjects = ['124', '135', '147', '165']  # Taken from original val pool
+val_subjects = ['009', '010', '012', '044', '059', '154']  # Remaining val subjects (exclusive from test)
+
 azimuths = np.array([-80, -65, -55, -45, -40, -35, -30, -25, -20, -15,
                      -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 55, 65, 80])
 elevations = np.linspace(-45, 230.625, 50)
 
+# File list and split
 files = sorted([f for f in os.listdir(input_dir_s1) if f.endswith('.wav')])
 num_total = len(files)
 num_train = int(train_ratio * num_total)
+num_test = int(test_ratio * num_total)
+num_val = num_total - num_train - num_test
+
 train_indices = range(0, num_train)
-val_indices = range(num_train, num_total)
+val_indices = range(num_train, num_train + num_val)
+test_indices = range(num_train + num_val, num_total)
 
 
 def load_hrir(subject_id):
@@ -59,7 +78,7 @@ def pad_to(arr, length):
 
 def select_angles(is_target):
     if is_target:
-        az_idx = np.random.randint(10, 15)  # ≈ -10 to 10 degrees
+        az_idx = np.random.randint(10, 15)
         el_idx = 25
     else:
         az_idx = np.random.randint(0, len(azimuths))
@@ -90,7 +109,7 @@ def process_sample(i, idx, hrir_subjects, out_dir, csv_writer):
     subject_id = random.choice(hrir_subjects)
     hrir_left, hrir_right = load_hrir(subject_id)
 
-    az_idx1, el_idx1 = select_angles(is_target=narrow_target_angle)  # True for narrowing az of target speaker
+    az_idx1, el_idx1 = select_angles(is_target=narrow_target_angle)
     az_idx2, el_idx2 = select_angles(is_target=False)
     az1, el1 = azimuths[az_idx1], elevations[el_idx1]
     az2, el2 = azimuths[az_idx2], elevations[el_idx2]
@@ -107,13 +126,11 @@ def process_sample(i, idx, hrir_subjects, out_dir, csv_writer):
         audio2 = np.pad(audio2, (early_onset_samples, 0), mode='constant')
         noise = np.pad(noise, (early_onset_samples, 0), mode='constant')
 
-    # Convolve to binaural using HRIR
     left1 = fftconvolve(audio1, hrir_left[az_idx1, el_idx1], mode='full')
     right1 = fftconvolve(audio1, hrir_right[az_idx1, el_idx1], mode='full')
     left2 = fftconvolve(audio2, hrir_left[az_idx2, el_idx2], mode='full')
     right2 = fftconvolve(audio2, hrir_right[az_idx2, el_idx2], mode='full')
 
-    # Noise and padding
     max_len = max(len(left1), len(left2), len(noise))
     left1, right1 = pad_to(left1, max_len), pad_to(right1, max_len)
     left2, right2 = pad_to(left2, max_len), pad_to(right2, max_len)
@@ -126,7 +143,6 @@ def process_sample(i, idx, hrir_subjects, out_dir, csv_writer):
     mix_left += noise_scaled
     mix_right += noise_scaled
 
-    # Stack left and right mix
     stereo = np.stack([mix_left, mix_right], axis=0)
 
     out_filename = f"mixture_{idx:07d}.wav"
@@ -135,7 +151,6 @@ def process_sample(i, idx, hrir_subjects, out_dir, csv_writer):
     clean = np.stack([left1, right1], axis=0) if target_speaker == 1 else np.stack([left2, right2], axis=0)
     sf.write(os.path.join(out_dir, "clean", out_filename), clean.T, sample_rate)
 
-    # Log metadata
     csv_writer.writerow([
         out_filename,
         file, az1, el1,
@@ -167,5 +182,15 @@ with open(val_csv, 'w', newline='') as f:
     ])
     for i, idx in enumerate(val_indices):
         process_sample(i, idx, val_subjects, val_dir, writer)
+
+# Test set
+with open(test_csv, 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow([
+        "filename", "s1_file", "az1", "el1", "s2_file", "az2", "el2",
+        "early_onset_ms", "overlap_ratio", "snr_db", "target_speaker", "hrir_subject"
+    ])
+    for i, idx in enumerate(test_indices):
+        process_sample(i, idx, test_subjects, test_dir, writer)
 
 print("Dataset generation complete.")
