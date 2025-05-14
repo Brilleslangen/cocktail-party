@@ -112,15 +112,15 @@ class TasNet(nn.Module):
         phase_left = torch.angle(stft_left)
         phase_right = torch.angle(stft_right)
 
-        # 3) ILD (Interaural Level Difference)
+        # ILD (Interaural Level Difference)
         ild = 10.0 * (mag_left.log10() - mag_right.log10())  # [B, F, T]
 
-        # 4) IPD (Interaural Phase Difference)
+        # IPD (Interaural Phase Difference)
         ipd = phase_left - phase_right
         cos_ipd = torch.cos(ipd)
         sin_ipd = torch.sin(ipd)
 
-        # 5) Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
+        # Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
         ild_t = ild.permute(0, 2, 1)
         cos_t = cos_ipd.permute(0, 2, 1)
         sin_t = sin_ipd.permute(0, 2, 1)

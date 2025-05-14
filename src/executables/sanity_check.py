@@ -28,6 +28,8 @@ def test_model_pass(cfg):
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def main(cfg: DictConfig):
     test_model_pass(cfg)
+    import torchmetrics
+    print(torchmetrics.__version__)
 
 
 if __name__ == "__main__":

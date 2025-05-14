@@ -1,4 +1,5 @@
 import os
+import time
 
 import torch
 import torchaudio
@@ -13,6 +14,7 @@ from src.data.dataset import AudioDataset
 from src.helpers import select_device, count_parameters, prettify_param_count
 from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
+from src.helpers.helpers import format_time
 from src.helpers.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
 
 
@@ -122,54 +124,69 @@ def validate_epoch(model: nn.Module,
       - SNR
       - SNR improvement (SNRi)
       - SI-SNR (scale-invariant)
-      - SI-SNR improvement (SI-SNRi)  ← PRIMARY
+      - SI-SNR improvement (SI-SNRi)
+      - SI-SDR
+      - SI-SDR improvement (SI-SDRi)
     """
+    import torch
+    from tqdm import tqdm
+
     model.eval()
     totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i", "si_sdr", "si_sdr_i"]}
     total_examples = 0
 
     with torch.no_grad():
         for mix, refL, refR, lengths in tqdm(loader, desc="Validate", leave=False):
-            # move everything to device
+            # move batch to device
             mix, refL, refR, lengths = (
                 mix.to(device),
                 refL.to(device),
                 refR.to(device),
                 lengths.to(device),
             )
+
             if hasattr(model.separator, "reset_state"):
                 model.separator.reset_state(batch_size=mix.size(0))
+
+            # Forward pass
             estL, estR = model(mix)
 
-            # compute masked loss
+            # Masked loss computation
             max_T = refL.size(1)
             mask = (torch.arange(max_T, device=device)[None] < lengths[:, None]).float()
             loss = ((criterion(estL, refL) + criterion(estR, refR)) * mask).sum() / mask.sum()
 
-            # bring to CPU for metrics
+            # Check mix shape
+            assert mix.dim() == 3 and mix.size(1) == 2, f"Expected mix shape [B, 2, T], got {mix.shape}"
+
+            # Bring to CPU for metric computation
             estL_c, estR_c = estL.cpu(), estR.cpu()
             mixL_c, mixR_c = mix[:, 0, :].cpu(), mix[:, 1, :].cpu()
             refL_c, refR_c = refL.cpu(), refR.cpu()
+
             B = estL_c.size(0)
 
-            # compute
+            # --- Use the abstracted batch metric functions ---
+
             snr_est, snr_i = compute_SNR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
             si_snr_est, si_snr_i = compute_SI_SNR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
             si_sdr_est, si_sdr_i = compute_SI_SDR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
 
-            # accumulate
-            totals["loss"] += loss.item() * B
+            # --- Accumulate sums ---
             totals["snr"] += snr_est.sum().item()
             totals["snr_i"] += snr_i.sum().item()
             totals["si_snr"] += si_snr_est.sum().item()
             totals["si_snr_i"] += si_snr_i.sum().item()
             totals["si_sdr"] += si_sdr_est.sum().item()
             totals["si_sdr_i"] += si_sdr_i.sum().item()
+
+            totals["loss"] += loss.item() * B
             total_examples += B
 
-    # average over all examples
+    # Average over all examples
     for k in totals:
         totals[k] /= total_examples
+
     return totals
 
 
@@ -177,6 +194,9 @@ def validate_epoch(model: nn.Module,
 def main(cfg: DictConfig):
     device = torch.device(select_device())
     torch.manual_seed(cfg.training.params.seed)
+
+    print("Using device:", device)
+    print("workers:", os.cpu_count())
 
     # build model, optimizer, scheduler, loss
     model = instantiate(cfg.model_arch).to(device)
@@ -215,13 +235,16 @@ def main(cfg: DictConfig):
     best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
 
     for epoch in range(1, cfg.training.params.max_epochs + 1):
+        start_time = time.time()
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
         val_stats = validate_epoch(model, val_loader, criterion, device)
+        time_elapsed = format_time(time.time() - start_time)
 
         scheduler.step(val_stats["loss"])
         print(
-            f"\rEpoch{epoch:2d} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
-            f"SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f}"
+            f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
+            f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f}" +
+            f"SI-SDRi={val_stats['si_sdr']:.2f} SI-SDR={val_stats['si_sdr_i']:.2f}"
         )
 
         if cfg.wandb.enabled:
@@ -232,6 +255,8 @@ def main(cfg: DictConfig):
                 "val/SNRi": val_stats["snr_i"],
                 "val/SI-SNR": val_stats["si_snr"],
                 "val/SI-SNRi": val_stats["si_snr_i"],
+                "val/SI-SDR": val_stats["si_sdr"],
+                "val/SI-SDRi": val_stats["si_sdr_i"],
                 "learning_rate": optimizer.param_groups[0]["lr"],
             }, step=epoch)
 
