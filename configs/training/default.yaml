@@ -1,6 +1,6 @@
 params:
-  batch_size:   2
-  num_workers:  1
+  batch_size:   4
+  num_workers:  12
   max_epochs:  100
   n_buckets:   10
   seed:        42

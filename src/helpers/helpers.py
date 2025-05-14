@@ -48,3 +48,17 @@ def prettify_param_count(param_count: int) -> str:
     else:
         return f"{param_count / 1e9:.2f}B"
 
+
+def format_time(seconds: float) -> str:
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    elif seconds < 3600:
+        minutes, seconds = divmod(seconds, 60)
+        return f"{minutes}m {seconds}s"
+    else:
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours}h {minutes}m {seconds}s"
+
+
