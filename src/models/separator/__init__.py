@@ -1,4 +1,5 @@
 from .tcnseparator import TCNSeparator
+from .liquidseparator import LiquidSeparator
 try:
     from .mambaseparator import MambaSeparator
 except ImportError:
@@ -13,4 +14,4 @@ except ImportError:
 
     pass
 
-__all__ = ["TCNSeparator", "MambaSeparator"]
+__all__ = ["TCNSeparator", "MambaSeparator", "LiquidSeparator"]

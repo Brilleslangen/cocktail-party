@@ -128,9 +128,6 @@ def validate_epoch(model: nn.Module,
       - SI-SDR
       - SI-SDR improvement (SI-SDRi)
     """
-    import torch
-    from tqdm import tqdm
-
     model.eval()
     totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i", "si_sdr", "si_sdr_i"]}
     total_examples = 0
@@ -156,29 +153,42 @@ def validate_epoch(model: nn.Module,
             mask = (torch.arange(max_T, device=device)[None] < lengths[:, None]).float()
             loss = ((criterion(estL, refL) + criterion(estR, refR)) * mask).sum() / mask.sum()
 
-            # Check mix shape
-            assert mix.dim() == 3 and mix.size(1) == 2, f"Expected mix shape [B, 2, T], got {mix.shape}"
-
             # Bring to CPU for metric computation
             estL_c, estR_c = estL.cpu(), estR.cpu()
-            mixL_c, mixR_c = mix[:, 0, :].cpu(), mix[:, 1, :].cpu()
+            mix_c = mix.cpu()
             refL_c, refR_c = refL.cpu(), refR.cpu()
 
             B = estL_c.size(0)
 
-            # --- Use the abstracted batch metric functions ---
+            # Compute metrics per-example (cropped)
+            for b in range(B):
+                T = lengths[b].item()
 
-            snr_est, snr_i = compute_SNR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
-            si_snr_est, si_snr_i = compute_SI_SNR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
-            si_sdr_est, si_sdr_i = compute_SI_SDR(estL_c, estR_c, mixL_c, mixR_c, refL_c, refR_c)
+                estL_b = estL_c[b, :T]
+                estR_b = estR_c[b, :T]
+                mixL_b = mix_c[b, 0, :T]
+                mixR_b = mix_c[b, 1, :T]
+                refL_b = refL_c[b, :T]
+                refR_b = refR_c[b, :T]
 
-            # --- Accumulate sums ---
-            totals["snr"] += snr_est.sum().item()
-            totals["snr_i"] += snr_i.sum().item()
-            totals["si_snr"] += si_snr_est.sum().item()
-            totals["si_snr_i"] += si_snr_i.sum().item()
-            totals["si_sdr"] += si_sdr_est.sum().item()
-            totals["si_sdr_i"] += si_sdr_i.sum().item()
+                # Metric computations
+                snr_est, snr_i = compute_SNR(estL_b.unsqueeze(0), estR_b.unsqueeze(0),
+                                             mixL_b.unsqueeze(0), mixR_b.unsqueeze(0),
+                                             refL_b.unsqueeze(0), refR_b.unsqueeze(0))
+                si_snr_est, si_snr_i = compute_SI_SNR(estL_b.unsqueeze(0), estR_b.unsqueeze(0),
+                                                      mixL_b.unsqueeze(0), mixR_b.unsqueeze(0),
+                                                      refL_b.unsqueeze(0), refR_b.unsqueeze(0))
+                si_sdr_est, si_sdr_i = compute_SI_SDR(estL_b.unsqueeze(0), estR_b.unsqueeze(0),
+                                                      mixL_b.unsqueeze(0), mixR_b.unsqueeze(0),
+                                                      refL_b.unsqueeze(0), refR_b.unsqueeze(0))
+
+                # Accumulate
+                totals["snr"] += snr_est.sum().item()
+                totals["snr_i"] += snr_i.sum().item()
+                totals["si_snr"] += si_snr_est.sum().item()
+                totals["si_snr_i"] += si_snr_i.sum().item()
+                totals["si_sdr"] += si_sdr_est.sum().item()
+                totals["si_sdr_i"] += si_sdr_i.sum().item()
 
             totals["loss"] += loss.item() * B
             total_examples += B
@@ -188,6 +198,7 @@ def validate_epoch(model: nn.Module,
         totals[k] /= total_examples
 
     return totals
+
 
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
@@ -243,7 +254,7 @@ def main(cfg: DictConfig):
         scheduler.step(val_stats["loss"])
         print(
             f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
-            f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f}" +
+            f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f} " +
             f"SI-SDRi={val_stats['si_sdr']:.2f} SI-SDR={val_stats['si_sdr_i']:.2f}"
         )
 

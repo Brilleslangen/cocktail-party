@@ -1,0 +1,4 @@
+_target_: "src.models.separator.LiquidSeparator"
+
+name: "Liquid"
+num_neurons: 512
