@@ -9,13 +9,14 @@ from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch import nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from src.data.dataset import AudioDataset
-from src.helpers import select_device, count_parameters, prettify_param_count
-from src.data.collate import pad_collate
+from src.helpers import select_device, count_parameters, prettify_param_count, format_time, ms_to_samples
+from src.data.collate import pad_collate, no_pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
-from src.helpers.helpers import format_time
 from src.helpers.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
+from src.helpers.streaming import streaming_forward
 
 
 # TODO:
@@ -59,13 +60,13 @@ def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     train_loader = DataLoader(
         train_ds,
         batch_sampler=train_sampler,
-        collate_fn=pad_collate,
+        collate_fn=no_pad_collate if cfg.model.streaming_mode else pad_collate,
         num_workers=cfg.training.params.num_workers,
     )
     val_loader = DataLoader(
         val_ds,
         batch_sampler=val_sampler,
-        collate_fn=pad_collate,
+        collate_fn=no_pad_collate if cfg.model.streaming_mode else pad_collate,
         num_workers=cfg.training.params.num_workers,
     )
     return train_loader, val_loader
@@ -82,20 +83,22 @@ def train_epoch(model: nn.Module,
     """
     model.train()
     total_loss = 0.0
+    streaming_mode = getattr(model, "streaming_mode", False)
+    window_len = getattr(model, "analysis_window", None)
+    stride_len = getattr(model, "analysis_hop", None)
 
-    progress_bar = tqdm(loader, desc="Train", leave=False)
-    for mix, refL, refR, lengths in progress_bar:
-        mix, refL, refR = (mix.to(device),
-                           refL.to(device),
-                           refR.to(device))
+    for mix, refL, refR, lengths in tqdm(loader, desc="Train", leave=False):
+        mix, refL, refR = (mix.to(device), refL.to(device), refR.to(device))
         lengths = lengths.to(device)
 
         # reset any stateful separator once per sequence
-        if hasattr(model.separator, "reset_state"):
-            model.separator.reset_state(batch_size=mix.size(0))
+        model.reset_state()
 
         # forward
-        estL, estR = model(mix)
+        if streaming_mode:
+            estL, estR = streaming_forward(model, mix, window_len, stride_len)
+        else:
+            estL, estR = model(mix)
 
         # mask out padded time‐steps in loss
         lossL = criterion(estL, refL)
@@ -198,7 +201,6 @@ def validate_epoch(model: nn.Module,
         totals[k] /= total_examples
 
     return totals
-
 
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")

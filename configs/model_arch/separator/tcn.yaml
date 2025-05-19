@@ -2,6 +2,7 @@ _target_: "src.models.separator.TCNSeparator"
 name: "conv"
 
 # Bottleneck and hidden sizes inside the TCN
+context_len_ms:    64      # length of the streaming buffer for the model - should be <= receptive field
 bn_dim:           64      # intermediate channels after causalNorm
 hidden_dim:       256     # channels inside each DepthConv1d
 

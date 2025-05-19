@@ -1,4 +1,5 @@
 _target_: "src.models.separator.LiquidSeparator"
-
 name: "Liquid"
-num_neurons: 512
+
+context_len_ms: ${model_arch.window_length_ms} # length of the streaming buffer for the model.
+num_neurons: 40

@@ -1,3 +1,4 @@
+import time
 from typing import Tuple, Any
 import torch
 import torch.nn as nn
@@ -21,7 +22,7 @@ class TasNet(nn.Module):
     """
 
     def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, sample_rate: int,
-                 window_length_ms: float, stride_ms: float, **kwargs: Any):
+                 window_length_ms: float, stride_ms: float, streaming_mode: bool, **kwargs: Any):
         super().__init__()
 
         # -------------------------------------------------------------------
@@ -33,20 +34,27 @@ class TasNet(nn.Module):
         # -------------------------------------------------------------------
         # STFT parameters for spatial features
         # -------------------------------------------------------------------
-        self.stft_window = ms_to_samples(window_length_ms, sample_rate)  # STFT window length (samples)
-        self.stft_hop = ms_to_samples(stride_ms, sample_rate)  # STFT hop length (samples)
-        self.register_buffer("stft_window_fn", torch.hann_window(self.stft_window))
+        self.analysis_window = ms_to_samples(window_length_ms, sample_rate)  # STFT window length (samples)
+        self.analysis_hop = ms_to_samples(stride_ms, sample_rate)  # STFT hop length (samples)
+        self.register_buffer("stft_window_fn", torch.hann_window(self.analysis_window))
 
         # -------------------------------------------------------------------
         # Compute separator's channel dimensions
         # -------------------------------------------------------------------
         D = self.encoder.get_output_dim()  # number of encoder filters
-        F = self.stft_window // 2 + 1  # number of STFT freq bins
+        F = self.analysis_window // 2 + 1  # number of STFT freq bins
         sep_input_dim = 2 * D + 3 * F  # [left; right; spatial]
         sep_output_dim = 2 * D  # two masks of size D
 
         # Instantiate separator with computed dims
         self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim)
+        self.buffer_len = ms_to_samples(self.separator.context_len_ms, sample_rate)
+
+    def reset_state(self):
+        """
+        Reset the separator state if it has one.
+        """
+        self.separator.reset_state()
 
     def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
@@ -61,7 +69,7 @@ class TasNet(nn.Module):
             rest (int): number of zeros appended at the end before context padding.
         """
         B, C, T = mixture.shape
-        win, hop = self.stft_window, self.stft_hop
+        win, hop = self.analysis_window, self.analysis_hop
 
         # Make (T + rest) divisible by window to align frames
         rest = win - (hop + T % win) % win
@@ -91,17 +99,17 @@ class TasNet(nn.Module):
         # 1) STFT
         stft_left = torch.stft(
             left_waveform,
-            n_fft=self.stft_window,
-            hop_length=self.stft_hop,
-            win_length=self.stft_window,
+            n_fft=self.analysis_window,
+            hop_length=self.analysis_hop,
+            win_length=self.analysis_window,
             window=self.stft_window_fn,
             return_complex=True
         )  # [B, F, T]
         stft_right = torch.stft(
             right_waveform,
-            n_fft=self.stft_window,
-            hop_length=self.stft_hop,
-            win_length=self.stft_window,
+            n_fft=self.analysis_window,
+            hop_length=self.analysis_hop,
+            win_length=self.analysis_window,
             window=self.stft_window_fn,
             return_complex=True
         )  # [B, F, T]
@@ -139,6 +147,7 @@ class TasNet(nn.Module):
             right_out (torch.Tensor): [batch, time_samples]
         """
         # Pad for alignment
+        start_time = time.time()
         mixture, rest = self.pad_signal(mixture)
         left, right = mixture[:, 0], mixture[:, 1]
 
@@ -147,6 +156,7 @@ class TasNet(nn.Module):
         enc_right = self.encoder(right)  # [B, D, T_frames]
 
         # Compute spatial features on padded signals
+
         sp_feats = self.compute_spatial_features(left, right)  # [B, 3F, T_frames]
 
         # Fuse features channel-wise
@@ -161,9 +171,12 @@ class TasNet(nn.Module):
         outR = self.decoder(mR * enc_right)  # [B, 1, T_padded]
 
         # Remove padding to recover original length
-        hop = self.stft_hop
+        hop = self.analysis_hop
         start, end = hop, -(rest + hop)
         left_out = outL[:, :, start:end].squeeze(1)  # [B, T]
         right_out = outR[:, :, start:end].squeeze(1)  # [B, T]
+
+        # print time used in ms
+        print((time.time() - start_time) * 1000)
 
         return left_out, right_out

@@ -35,7 +35,7 @@ class LiquidSeparator(SubModule):
         B, C, T = x.shape
         seq = x.permute(0, 2, 1)  # → [B, T, C]
         h, _ = self.cfc(seq)
-        h = h.permute(0, 2, 1) # → [B, C, T]
+        h = h.permute(0, 2, 1)     # → [B, C, T]
 
         return h
 

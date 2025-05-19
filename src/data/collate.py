@@ -28,3 +28,12 @@ def pad_collate(batch):
     rights_p = pad_sequence([r for r in rights], batch_first=True)
 
     return mix_p, lefts_p, rights_p, torch.tensor(lengths, dtype=torch.long)
+
+
+def no_pad_collate(batch):
+    mixes, lefts, rights = zip(*batch)
+    lengths = [m.shape[1] for m in mixes]
+    mix_batch = torch.stack(mixes, dim=0)  # [B,2,T_i] ragged
+    left_batch = torch.stack(lefts, dim=0)
+    right_batch = torch.stack(rights, dim=0)
+    return mix_batch, left_batch, right_batch, torch.tensor(lengths)
