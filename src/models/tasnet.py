@@ -24,6 +24,7 @@ class TasNet(nn.Module):
     def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, sample_rate: int,
                  window_length_ms: float, stride_ms: float, streaming_mode: bool, **kwargs: Any):
         super().__init__()
+        self.streaming_mode = streaming_mode
 
         # -------------------------------------------------------------------
         # Instantiate encoder and decoder from their Hydra configs
@@ -54,7 +55,7 @@ class TasNet(nn.Module):
         """
         Reset the separator state if it has one.
         """
-        self.separator.reset_state()
+        #self.separator.reset_state()
 
     def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
@@ -147,7 +148,6 @@ class TasNet(nn.Module):
             right_out (torch.Tensor): [batch, time_samples]
         """
         # Pad for alignment
-        start_time = time.time()
         mixture, rest = self.pad_signal(mixture)
         left, right = mixture[:, 0], mixture[:, 1]
 
@@ -160,6 +160,7 @@ class TasNet(nn.Module):
         sp_feats = self.compute_spatial_features(left, right)  # [B, 3F, T_frames]
 
         # Fuse features channel-wise
+        enc_left, enc_right, sp_feats = crop_to_min_time(enc_left, enc_right, sp_feats)
         fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
 
         # Estimate masks
@@ -177,6 +178,9 @@ class TasNet(nn.Module):
         right_out = outR[:, :, start:end].squeeze(1)  # [B, T]
         out = torch.stack([left_out, right_out], dim=1)
 
-        print((time.time() - start_time) * 1000)
-
         return out
+
+
+def crop_to_min_time(*tensors):
+    min_T = min(t.shape[-1] for t in tensors)
+    return [t[..., :min_T] for t in tensors]

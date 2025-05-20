@@ -2,7 +2,6 @@ import os
 import time
 
 import torch
-import torchaudio
 import hydra
 import wandb
 from tqdm import tqdm
@@ -10,12 +9,10 @@ from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch import nn
 from torch.utils.data import DataLoader
-from src.data.dataset import AudioDataset
-from src.evaluate.loss import Loss
+
+from src.data.collate import setup_train_dataloaders
+from src.evaluate import Loss, compute_mask, batch_si_snr, batch_snr
 from src.helpers import select_device, count_parameters, prettify_param_count, format_time
-from src.data.collate import pad_collate
-from src.data.bucket_sampler import BucketBatchSampler
-from src.evaluate.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
 from src.data.streaming import Streamer
 
 
@@ -28,51 +25,7 @@ from src.data.streaming import Streamer
 #  7. Make dataset use the huggingface datasets library. This will allow us to upload the dataset and enable
 #  streaming mode.
 
-def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
-    """
-    Build train and val DataLoaders with bucketing and padding.
-    """
-    run = wandb.run
-    dataset_dir = run.use_artifact(cfg.dataset.artifact_name, type="dataset").download()
-    train_dir = os.path.join(dataset_dir, "train")
-    val_dir = os.path.join(dataset_dir, "val")
-
-    train_ds = AudioDataset(train_dir, cfg.model_arch.sample_rate)
-    val_ds = AudioDataset(val_dir, cfg.model_arch.sample_rate)
-
-    # compute raw lengths (in samples) for bucketing
-    train_lengths = [torchaudio.info(p).num_frames for p in train_ds.mix_files]
-    val_lengths = [torchaudio.info(p).num_frames for p in val_ds.mix_files]
-
-    train_sampler = BucketBatchSampler(
-        lengths=train_lengths,
-        batch_size=cfg.training.params.batch_size,
-        n_buckets=cfg.training.params.n_buckets,
-        shuffle=True
-    )
-    val_sampler = BucketBatchSampler(
-        lengths=val_lengths,
-        batch_size=cfg.training.params.batch_size,
-        n_buckets=cfg.training.params.n_buckets,
-        shuffle=False
-    )
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_sampler=train_sampler,
-        collate_fn=pad_collate,
-        num_workers=cfg.training.params.num_workers,
-    )
-    val_loader = DataLoader(
-        val_ds,
-        batch_sampler=val_sampler,
-        collate_fn=pad_collate,
-        num_workers=cfg.training.params.num_workers,
-    )
-    return train_loader, val_loader
-
-
-def train_epoch(model: nn.Module, loader: DataLoader, loss: Loss, optimizer: torch.optim.Optimizer,
+def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: torch.optim.Optimizer,
                 device: torch.device):
     """
     Runs one full training epoch over `loader`.
@@ -96,7 +49,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss: Loss, optimizer: tor
         else:
             ests = model(mix)
 
-        loss = loss(ests, refs, lengths)
+        loss = loss_fn(ests, refs, lengths)
 
         # Backprop
         optimizer.zero_grad()
@@ -108,90 +61,64 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss: Loss, optimizer: tor
     return total_loss / len(loader)
 
 
-def validate_epoch(model: nn.Module,
-                   loader: DataLoader,
-                   criterion: nn.Module,
-                   device: torch.device):
-    """
-    Runs one validation epoch and returns average metrics:
-      - loss
-      - SNR
-      - SNR improvement (SNRi)
-      - SI-SNR (scale-invariant)
-      - SI-SNR improvement (SI-SNRi)
-      - SI-SDR
-      - SI-SDR improvement (SI-SDRi)
-    """
+def validate_epoch(
+    model: torch.nn.Module,
+    loader,
+    criterion,
+    device: torch.device,
+):
     model.eval()
-    totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i", "si_sdr", "si_sdr_i"]}
+    totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i"]}
     total_examples = 0
 
     with torch.no_grad():
-        for mix, refL, refR, lengths in tqdm(loader, desc="Validate", leave=False):
-            # move batch to device
-            mix, refL, refR, lengths = (
-                mix.to(device),
-                refL.to(device),
-                refR.to(device),
-                lengths.to(device),
-            )
+        for mix, refs, lengths in tqdm(loader, desc="Validate", leave=False):
+            mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
 
-            if hasattr(model.separator, "reset_state"):
+            if hasattr(model, "reset_state"):
+                model.reset_state()
+            elif hasattr(model, "separator") and hasattr(model.separator, "reset_state"):
                 model.separator.reset_state(batch_size=mix.size(0))
 
-            # Forward pass
-            estL, estR = model(mix)
+            ests = model(mix)
+            loss = criterion(ests, refs, lengths)
+            B = ests.size(0)
 
-            # Masked loss computation
-            max_T = refL.size(1)
-            mask = (torch.arange(max_T, device=device)[None] < lengths[:, None]).float()
-            loss = ((criterion(estL, refL) + criterion(estR, refR)) * mask).sum() / mask.sum()
+            # Compute mask for valid frames
+            mask = compute_mask(lengths, ests.size(-1), ests.device)
 
-            # Bring to CPU for metric computation
-            estL_c, estR_c = estL.cpu(), estR.cpu()
-            mix_c = mix.cpu()
-            refL_c, refR_c = refL.cpu(), refR.cpu()
+            # For each channel
+            snr_out_L = batch_snr(ests[:, 0, :], refs[:, 0, :], mask)
+            snr_out_R = batch_snr(ests[:, 1, :], refs[:, 1, :], mask)
+            snr_mix_L = batch_snr(mix[:, 0, :], refs[:, 0, :], mask)
+            snr_mix_R = batch_snr(mix[:, 1, :], refs[:, 1, :], mask)
 
-            B = estL_c.size(0)
+            snr_est = (snr_out_L + snr_out_R) / 2
+            snr_mix = (snr_mix_L + snr_mix_R) / 2
+            snr_i = snr_est - snr_mix  # improvement
 
-            # Compute metrics per-example (cropped)
-            for b in range(B):
-                T = lengths[b].item()
+            si_snr_out_L = batch_si_snr(ests[:, 0, :], refs[:, 0, :], mask)
+            si_snr_out_R = batch_si_snr(ests[:, 1, :], refs[:, 1, :], mask)
+            si_snr_mix_L = batch_si_snr(mix[:, 0, :], refs[:, 0, :], mask)
+            si_snr_mix_R = batch_si_snr(mix[:, 1, :], refs[:, 1, :], mask)
 
-                estL_b = estL_c[b, :T]
-                estR_b = estR_c[b, :T]
-                mixL_b = mix_c[b, 0, :T]
-                mixR_b = mix_c[b, 1, :T]
-                refL_b = refL_c[b, :T]
-                refR_b = refR_c[b, :T]
+            si_snr_est = (si_snr_out_L + si_snr_out_R) / 2
+            si_snr_mix = (si_snr_mix_L + si_snr_mix_R) / 2
+            si_snr_i = si_snr_est - si_snr_mix
 
-                # Metric computations
-                snr_est, snr_i = compute_SNR(estL_b.unsqueeze(0), estR_b.unsqueeze(0),
-                                             mixL_b.unsqueeze(0), mixR_b.unsqueeze(0),
-                                             refL_b.unsqueeze(0), refR_b.unsqueeze(0))
-                si_snr_est, si_snr_i = compute_SI_SNR(estL_b.unsqueeze(0), estR_b.unsqueeze(0),
-                                                      mixL_b.unsqueeze(0), mixR_b.unsqueeze(0),
-                                                      refL_b.unsqueeze(0), refR_b.unsqueeze(0))
-                si_sdr_est, si_sdr_i = compute_SI_SDR(estL_b.unsqueeze(0), estR_b.unsqueeze(0),
-                                                      mixL_b.unsqueeze(0), mixR_b.unsqueeze(0),
-                                                      refL_b.unsqueeze(0), refR_b.unsqueeze(0))
-
-                # Accumulate
-                totals["snr"] += snr_est.sum().item()
-                totals["snr_i"] += snr_i.sum().item()
-                totals["si_snr"] += si_snr_est.sum().item()
-                totals["si_snr_i"] += si_snr_i.sum().item()
-                totals["si_sdr"] += si_sdr_est.sum().item()
-                totals["si_sdr_i"] += si_sdr_i.sum().item()
-
+            # Sum (not mean) to enable averaging at end
             totals["loss"] += loss.item() * B
+            totals["snr"] += snr_est.sum().item()
+            totals["snr_i"] += snr_i.sum().item()
+            totals["si_snr"] += si_snr_est.sum().item()
+            totals["si_snr_i"] += si_snr_i.sum().item()
             total_examples += B
 
-    # Average over all examples
     for k in totals:
         totals[k] /= total_examples
 
     return totals
+
 
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
@@ -247,9 +174,7 @@ def main(cfg: DictConfig):
         scheduler.step(val_stats["loss"])
         print(
             f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
-            f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f} " +
-            f"SI-SDRi={val_stats['si_sdr']:.2f} SI-SDR={val_stats['si_sdr_i']:.2f}"
-        )
+            f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f} ")
 
         if cfg.wandb.enabled:
             wandb.log({

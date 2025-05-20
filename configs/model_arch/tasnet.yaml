@@ -3,11 +3,11 @@ _recursive_: false
 
 name: "tasnet"
 
-streaming_mode: true        # Process entire audio stream (offline) or process in chunks (online)
+streaming_mode: false        # Process entire audio stream (offline) or process in chunks (online)
 feature_dim: 64             # feature dimension (efficiency <- output dimensionality -> expressivity)
 filter_length_ms: 4.0       # Encoder/decoder filter length. Temporal expressiveness vs. frequency resolution
 window_length_ms: 32.0      # STFT window length (512 samples @16 kHz)
-stride_ms: 4.0              # STFT hop length (32 samples @16 kHz)
+stride_ms: 2.0              # STFT hop length (32 samples @16 kHz)
 sample_rate: 16000          # sample rate
 
 defaults:

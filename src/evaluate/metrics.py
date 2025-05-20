@@ -1,33 +1,36 @@
-from torchmetrics.functional.audio import (
-    signal_noise_ratio,
-    scale_invariant_signal_noise_ratio,
-    scale_invariant_signal_distortion_ratio,
-)
+import torch
 
 
-def compute_SNR(estL, estR, mixL, mixR, refL, refR):
-    """Compute SNR and SNR improvement (SNRi) for a batch."""
-    snr_est = 0.5 * (signal_noise_ratio(estL, refL) + signal_noise_ratio(estR, refR))  # [B]
-    snr_mix = 0.5 * (signal_noise_ratio(mixL, refL) + signal_noise_ratio(mixR, refR))  # [B]
-    snr_i = snr_est - snr_mix  # [B]
-    return snr_est, snr_i
+def batch_snr(est, ref, mask, eps=1e-8):
+    """
+    est, ref, mask: [B, T]
+    Returns: [B] SNR (dB) for each item
+    """
+    signal_power = ((ref * mask) ** 2).sum(dim=1)
+    noise_power = (((est - ref) * mask) ** 2).sum(dim=1) + eps
+    snr = 10 * torch.log10(signal_power / noise_power)
+    return snr
 
 
-def compute_SI_SNR(estL, estR, mixL, mixR, refL, refR):
-    """Compute SI-SNR and SI-SNR improvement (SI-SNRi) for a batch."""
-    si_snr_est = 0.5 * (scale_invariant_signal_noise_ratio(estL, refL) +
-                        scale_invariant_signal_noise_ratio(estR, refR))  # [B]
-    si_snr_mix = 0.5 * (scale_invariant_signal_noise_ratio(mixL, refL) +
-                        scale_invariant_signal_noise_ratio(mixR, refR))  # [B]
-    si_snr_i = si_snr_est - si_snr_mix  # [B]
-    return si_snr_est, si_snr_i
+def batch_si_snr(est, ref, mask, eps=1e-8):
+    """
+    est, ref, mask: [B, T]
+    Returns: [B] SI-SNR (dB) for each item
+    """
+    # Zero-mean
+    mask_sum = mask.sum(dim=1, keepdim=True)
+    est_zm = est * mask - ((est * mask).sum(dim=1, keepdim=True) / (mask_sum + eps))
+    ref_zm = ref * mask - ((ref * mask).sum(dim=1, keepdim=True) / (mask_sum + eps))
+
+    # Projection
+    s_target = (torch.sum(est_zm * ref_zm, dim=1, keepdim=True) / (
+                torch.sum(ref_zm ** 2, dim=1, keepdim=True) + eps)) * ref_zm
+    e_noise = est_zm - s_target
+    si_snr = 10 * torch.log10((s_target ** 2).sum(dim=1) / ((e_noise ** 2).sum(dim=1) + eps) + eps)
+    return si_snr
 
 
-def compute_SI_SDR(estL, estR, mixL, mixR, refL, refR):
-    """Compute SI-SDR and SI-SDR improvement (SI-SDRi) for a batch."""
-    si_sdr_est = 0.5 * (scale_invariant_signal_distortion_ratio(estL, refL, zero_mean=True) +
-                        scale_invariant_signal_distortion_ratio(estR, refR, zero_mean=True))  # [B]
-    si_sdr_mix = 0.5 * (scale_invariant_signal_distortion_ratio(mixL, refL, zero_mean=True) +
-                        scale_invariant_signal_distortion_ratio(mixR, refR, zero_mean=True))  # [B]
-    si_sdr_i = si_sdr_est - si_sdr_mix  # [B]
-    return si_sdr_est, si_sdr_i
+# You may want SI-SDR, but SI-SNR is often enough for deep learning evaluation. For SI-SDR:
+def batch_si_sdr(est, ref, mask, eps=1e-8):
+    # For most speech tasks, SI-SDR = SI-SNR, unless you add scaling factors or reference normalization.
+    return batch_si_snr(est, ref, mask, eps=eps)
