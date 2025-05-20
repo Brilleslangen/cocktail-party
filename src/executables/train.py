@@ -9,14 +9,14 @@ from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch import nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from src.data.dataset import AudioDataset
-from src.helpers import select_device, count_parameters, prettify_param_count, format_time, ms_to_samples
-from src.data.collate import pad_collate, no_pad_collate
+from src.evaluate.loss import Loss
+from src.helpers import select_device, count_parameters, prettify_param_count, format_time
+from src.data.collate import pad_collate
 from src.data.bucket_sampler import BucketBatchSampler
-from src.helpers.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
-from src.helpers.streaming import streaming_forward
+from src.evaluate.metrics import compute_SNR, compute_SI_SNR, compute_SI_SDR
+from src.data.streaming import Streamer
 
 
 # TODO:
@@ -60,22 +60,19 @@ def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     train_loader = DataLoader(
         train_ds,
         batch_sampler=train_sampler,
-        collate_fn=no_pad_collate if cfg.model.streaming_mode else pad_collate,
+        collate_fn=pad_collate,
         num_workers=cfg.training.params.num_workers,
     )
     val_loader = DataLoader(
         val_ds,
         batch_sampler=val_sampler,
-        collate_fn=no_pad_collate if cfg.model.streaming_mode else pad_collate,
+        collate_fn=pad_collate,
         num_workers=cfg.training.params.num_workers,
     )
     return train_loader, val_loader
 
 
-def train_epoch(model: nn.Module,
-                loader: DataLoader,
-                criterion: nn.Module,
-                optimizer: torch.optim.Optimizer,
+def train_epoch(model: nn.Module, loader: DataLoader, loss: Loss, optimizer: torch.optim.Optimizer,
                 device: torch.device):
     """
     Runs one full training epoch over `loader`.
@@ -84,30 +81,24 @@ def train_epoch(model: nn.Module,
     model.train()
     total_loss = 0.0
     streaming_mode = getattr(model, "streaming_mode", False)
-    window_len = getattr(model, "analysis_window", None)
-    stride_len = getattr(model, "analysis_hop", None)
+    streamer = Streamer(model) if streaming_mode else None
 
-    for mix, refL, refR, lengths in tqdm(loader, desc="Train", leave=False):
-        mix, refL, refR = (mix.to(device), refL.to(device), refR.to(device))
-        lengths = lengths.to(device)
+    for mix, refs, lengths in tqdm(loader, desc="Train", leave=False):
+        mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
+        B, C, _ = mix.shape
 
         # reset any stateful separator once per sequence
         model.reset_state()
 
         # forward
         if streaming_mode:
-            estL, estR = streaming_forward(model, mix, window_len, stride_len)
+            ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
         else:
-            estL, estR = model(mix)
+            ests = model(mix)
 
-        # mask out padded time‐steps in loss
-        lossL = criterion(estL, refL)
-        lossR = criterion(estR, refR)
-        max_T = refL.size(1)
-        mask = (torch.arange(max_T, device=device)[None, :] < lengths[:, None]).float()
-        loss = ((lossL + lossR) * mask).sum() / mask.sum()
+        loss = loss(ests, refs, lengths)
 
-        # backward
+        # Backprop
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -215,7 +206,7 @@ def main(cfg: DictConfig):
     model = instantiate(cfg.model_arch).to(device)
     optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
     scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
-    criterion = instantiate(cfg.training.criterion).to(device)
+    loss = instantiate(cfg.training.loss).to(device)
 
     # Calculate composite figures and init wandb
     param_count = count_parameters(model)
@@ -249,8 +240,8 @@ def main(cfg: DictConfig):
 
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         start_time = time.time()
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
-        val_stats = validate_epoch(model, val_loader, criterion, device)
+        train_loss = train_epoch(model, train_loader, loss, optimizer, device)
+        val_stats = validate_epoch(model, val_loader, loss, device)
         time_elapsed = format_time(time.time() - start_time)
 
         scheduler.step(val_stats["loss"])

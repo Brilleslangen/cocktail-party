@@ -22,7 +22,7 @@ class TCNSeparator(SubModule):
     """
 
     def __init__(self, input_dim: int, output_dim: int, name: str, bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int,
-                 kernel_size: int, skip_connection: bool, causal: bool, dilated: bool):
+                 kernel_size: int, skip_connection: bool, causal: bool, dilated: bool, context_len_ms: float):
         super().__init__()
 
         # Store dims
@@ -32,6 +32,7 @@ class TCNSeparator(SubModule):
         self.receptive_field = 0
         self.dilated = dilated
         self.skip = skip_connection
+        self.context_len_ms = context_len_ms
 
         # Normalization and bottleneck 1x1 conv
         self.LN = cLN(input_dim) if causal else nn.GroupNorm(1, input_dim, eps=1e-8)

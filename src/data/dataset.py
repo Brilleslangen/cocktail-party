@@ -24,10 +24,7 @@ class AudioDataset(Dataset):
             f"Sample-rate mismatch: mix {sr1}, clean {sr2}, expected {self.sample_rate}"
         )
 
-        left_ref = clean[0]
-        right_ref = clean[1]
-
-        return mixture, left_ref, right_ref
+        return mixture, clean
 
 
 

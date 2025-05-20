@@ -135,7 +135,7 @@ class TasNet(nn.Module):
         stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)
         return stacked.permute(0, 2, 1)  # [B, 3F, T]
 
-    def forward(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, mixture: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the binaural TasNet.
 
@@ -175,8 +175,8 @@ class TasNet(nn.Module):
         start, end = hop, -(rest + hop)
         left_out = outL[:, :, start:end].squeeze(1)  # [B, T]
         right_out = outR[:, :, start:end].squeeze(1)  # [B, T]
+        out = torch.stack([left_out, right_out], dim=1)
 
-        # print time used in ms
         print((time.time() - start_time) * 1000)
 
-        return left_out, right_out
+        return out
