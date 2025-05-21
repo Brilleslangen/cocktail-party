@@ -120,7 +120,6 @@ def validate_epoch(
     return totals
 
 
-
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def main(cfg: DictConfig):
     device = torch.device(select_device())
@@ -184,8 +183,6 @@ def main(cfg: DictConfig):
                 "val/SNRi": val_stats["snr_i"],
                 "val/SI-SNR": val_stats["si_snr"],
                 "val/SI-SNRi": val_stats["si_snr_i"],
-                "val/SI-SDR": val_stats["si_sdr"],
-                "val/SI-SDRi": val_stats["si_sdr_i"],
                 "learning_rate": optimizer.param_groups[0]["lr"],
             }, step=epoch)
 

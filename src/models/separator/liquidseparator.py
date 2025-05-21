@@ -16,6 +16,7 @@ class LiquidSeparator(SubModule):
             input_dim: int,
             output_dim: int,
             num_neurons: int,
+            context_size_ms: float,
             name):
         super().__init__()
         assert output_dim % 2 == 0, "output_dim must be 2*D"
@@ -23,6 +24,8 @@ class LiquidSeparator(SubModule):
 
         self.input_dim = input_dim
         self.output_dim = output_dim
+
+        self.context_size_ms = context_size_ms
         self.name = name
 
         num_neurons = max(num_neurons, output_dim + 3)

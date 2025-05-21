@@ -1,3 +1,4 @@
+import math
 import time
 from typing import Tuple, Any
 import torch
@@ -22,9 +23,9 @@ class TasNet(nn.Module):
     """
 
     def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, sample_rate: int,
-                 window_length_ms: float, stride_ms: float, streaming_mode: bool, **kwargs: Any):
+                 window_length_ms: float, stride_ms: float, streaming_mode: bool, stream_chunk_size_ms: float,
+                 filter_length_ms, **kwargs: Any):
         super().__init__()
-        self.streaming_mode = streaming_mode
 
         # -------------------------------------------------------------------
         # Instantiate encoder and decoder from their Hydra configs
@@ -49,13 +50,22 @@ class TasNet(nn.Module):
 
         # Instantiate separator with computed dims
         self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim)
-        self.buffer_len = ms_to_samples(self.separator.context_len_ms, sample_rate)
+
+        # Streaming params
+        self.streaming_mode = streaming_mode  # Size input timespan
+        self.input_size = ms_to_samples(max(window_length_ms, self.separator.context_size_ms), sample_rate)
+        self.output_size = ms_to_samples(stream_chunk_size_ms, sample_rate)  # samples of raw audio
+        self.sep_context_size = ms_to_samples(self.separator.context_size_ms, sample_rate)  # samples of raw audio
+        self.frames_per_context = int(self.separator.context_size_ms // stride_ms)  # number of input frames
+        self.frames_per_output = math.ceil((self.output_size + 2*self.encoder.pad - self.encoder.filter_length)
+                                           / self.analysis_hop) + 1
+        print('frames per output', self.frames_per_output)
 
     def reset_state(self):
         """
         Reset the separator state if it has one.
         """
-        #self.separator.reset_state()
+        # self.separator.reset_state()
 
     def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
@@ -147,40 +157,69 @@ class TasNet(nn.Module):
             left_out (torch.Tensor): [batch, time_samples]
             right_out (torch.Tensor): [batch, time_samples]
         """
-        # Pad for alignment
-        mixture, rest = self.pad_signal(mixture)
+        # Pad for alignment in offline mode
+        start_time = time.time()
+        mixture, rest = (mixture, None) if self.streaming_mode else self.pad_signal(mixture)
+        # print('rest', rest)
         left, right = mixture[:, 0], mixture[:, 1]
 
-        # Encode each channel
-        enc_left = self.encoder(left)  # [B, D, T_frames]
-        enc_right = self.encoder(right)  # [B, D, T_frames]
+        sp_feats = self.compute_spatial_features(left, right)
 
-        # Compute spatial features on padded signals
+        if self.streaming_mode:
+            enc_left = self.encoder(left[..., -self.sep_context_size:])
+            enc_right = self.encoder(right[..., -self.sep_context_size:])
+            sp_feats = sp_feats[..., -self.frames_per_context:]
+        else:
+            enc_left = self.encoder(left)
+            enc_right = self.encoder(right)
 
-        sp_feats = self.compute_spatial_features(left, right)  # [B, 3F, T_frames]
+        # print("Encoder input length:", left.shape[-1])
+        # print("Encoder output shape:", enc_left.shape)
+        # print("STFT input length:", left.shape[-1])
+        # print("STFT output shape:", sp_feats.shape)
+        #
+        # print('enc', enc_left.shape, enc_right.shape, sp_feats.shape)
 
         # Fuse features channel-wise
         enc_left, enc_right, sp_feats = crop_to_min_time(enc_left, enc_right, sp_feats)
         fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
 
         # Estimate masks
-        masks = self.separator(fused)  # [B, 2D, T_frames]
-        mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
+        if self.streaming_mode:
+            masks = self.separator(fused)[..., -self.frames_per_output:]
+            mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
+            enc_left, enc_right = enc_left[..., -self.frames_per_output:], enc_right[..., -self.frames_per_output:]
+        else:
+            masks = self.separator(fused)
+            mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
 
         # Apply masks and decode
         outL = self.decoder(mL * enc_left)  # [B, 1, T_padded]
         outR = self.decoder(mR * enc_right)  # [B, 1, T_padded]
 
         # Remove padding to recover original length
-        hop = self.analysis_hop
-        start, end = hop, -(rest + hop)
-        left_out = outL[:, :, start:end].squeeze(1)  # [B, T]
-        right_out = outR[:, :, start:end].squeeze(1)  # [B, T]
-        out = torch.stack([left_out, right_out], dim=1)
+        if not self.streaming_mode:
+            hop = self.analysis_hop
+            start, end = hop, -(rest + hop)
+            outL = outL[:, :, start:end]  # [B, T]
+            outR = outR[:, :, start:end]  # [B, T]
+
+        out = torch.stack([outL.squeeze(1), outR.squeeze(1)], dim=1)
 
         return out
 
 
 def crop_to_min_time(*tensors):
     min_T = min(t.shape[-1] for t in tensors)
-    return [t[..., :min_T] for t in tensors]
+    return [t[..., -min_T:] for t in tensors]
+
+
+def calculate_frames_per_output(chunk_size_ms: float, stride_ms: float, kernel_size_ms: float, sample_rate: int,
+                                causal: bool = False) -> int:
+    chunk_samples = ms_to_samples(chunk_size_ms,  sample_rate)
+    stride_samples = ms_to_samples(stride_ms,       sample_rate)
+    kernel_samples = ms_to_samples(kernel_size_ms,  sample_rate)
+
+    # Determine decoder padding in samples
+    pad = (kernel_samples - stride_samples) if causal else (kernel_samples // 2)
+    return math.ceil((chunk_samples + 2*pad - kernel_samples) / stride_samples) + 1

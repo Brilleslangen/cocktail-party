@@ -13,12 +13,14 @@ class MambaSeparator(SubModule):
         d_state: int,
         d_conv: int,
         expand: int,
+        context_size_ms: float,
         name: str
     ):
         super().__init__()
         self.name = name
         self.input_dim = input_dim
         self.output_dim = output_dim
+        self.context_size_ms = context_size_ms
 
         self.input_proj = nn.Conv1d(input_dim, d_model, kernel_size=1)
         self.mamba = Mamba2(
