@@ -21,9 +21,9 @@ class TCNSeparator(SubModule):
         dilated (bool): Use exponentially dilated convolutions.
     """
 
-    def __init__(self, input_dim: int, output_dim: int, name: str, bn_dim: int, hidden_dim: int, num_layers: int,
-                 num_stacks: int, kernel_size: int, skip_connection: bool, causal: bool, dilated: bool,
-                 context_size_ms: float):
+    def __init__(self, input_dim: int, output_dim: int, frames_per_output: int, streaming_mode: bool, name: str,
+                 bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int, kernel_size: int,
+                 skip_connection: bool, causal: bool, dilated: bool, context_size_ms: float):
         super().__init__()
 
         # Store dims
@@ -56,6 +56,10 @@ class TCNSeparator(SubModule):
                 self.receptive_field += (kernel_size - 1) * dilation if (i or s) else kernel_size
                 self.TCN.append(block)
 
+        # Average pooling to reduce time dimension in streaming mode
+        self.streaming_mode = streaming_mode
+        self.stream_pool = nn.AdaptiveAvgPool1d(frames_per_output)
+
         # Final 1x1 conv to project back to output_dim channels
         self.output = nn.Sequential(
             nn.PReLU(),
@@ -87,6 +91,9 @@ class TCNSeparator(SubModule):
             for block in self.TCN:
                 res = block(f)
                 f = f + res
+
+        if self.streaming_mode:  # Apply average pooling to reduce time dimension to output size.
+            f = self.stream_pool(f)
 
         # Final output projection
         return self.output(f)

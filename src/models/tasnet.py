@@ -48,17 +48,21 @@ class TasNet(nn.Module):
         sep_input_dim = 2 * D + 3 * F  # [left; right; spatial]
         sep_output_dim = 2 * D  # two masks of size D
 
+        # Separator streaming params
+        self.output_size = ms_to_samples(stream_chunk_size_ms, sample_rate)  # samples of raw audio
+        self.frames_per_output = math.ceil((self.output_size + 2 * self.decoder.pad - self.decoder.filter_length)
+                                           / self.analysis_hop) + 1  # Only for streaming mode
+
         # Instantiate separator with computed dims
-        self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim)
+        self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim,
+                                                frames_per_output=self.frames_per_output)
 
         # Streaming params
         self.streaming_mode = streaming_mode  # Size input timespan
         self.input_size = ms_to_samples(max(window_length_ms, self.separator.context_size_ms), sample_rate)
-        self.output_size = ms_to_samples(stream_chunk_size_ms, sample_rate)  # samples of raw audio
         self.sep_context_size = ms_to_samples(self.separator.context_size_ms, sample_rate)  # samples of raw audio
         self.frames_per_context = int(self.separator.context_size_ms // stride_ms)  # number of input frames
-        self.frames_per_output = math.ceil((self.output_size + 2*self.decoder.pad - self.decoder.filter_length)
-                                           / self.analysis_hop) + 1
+        print(f'frames_per_context: {self.frames_per_context}, frames_per_output: {self.frames_per_output}')
 
     def reset_state(self):
         """
@@ -177,13 +181,11 @@ class TasNet(nn.Module):
         fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
 
         # Estimate masks
+        masks = self.separator(fused)
+        mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
+
         if self.streaming_mode:
-            masks = self.separator(fused)[..., -self.frames_per_output:]
-            mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
             enc_left, enc_right = enc_left[..., -self.frames_per_output:], enc_right[..., -self.frames_per_output:]
-        else:
-            masks = self.separator(fused)
-            mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
 
         # Apply masks and decode
         outL = self.decoder(mL * enc_left)  # [B, 1, T_padded]
@@ -208,10 +210,10 @@ def crop_to_min_time(*tensors):
 
 def calculate_frames_per_output(chunk_size_ms: float, stride_ms: float, kernel_size_ms: float, sample_rate: int,
                                 causal: bool = False) -> int:
-    chunk_samples = ms_to_samples(chunk_size_ms,  sample_rate)
-    stride_samples = ms_to_samples(stride_ms,       sample_rate)
-    kernel_samples = ms_to_samples(kernel_size_ms,  sample_rate)
+    chunk_samples = ms_to_samples(chunk_size_ms, sample_rate)
+    stride_samples = ms_to_samples(stride_ms, sample_rate)
+    kernel_samples = ms_to_samples(kernel_size_ms, sample_rate)
 
     # Determine decoder padding in samples
     pad = (kernel_samples - stride_samples) if causal else (kernel_samples // 2)
-    return math.ceil((chunk_samples + 2*pad - kernel_samples) / stride_samples) + 1
+    return math.ceil((chunk_samples + 2 * pad - kernel_samples) / stride_samples) + 1
