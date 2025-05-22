@@ -36,8 +36,9 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
     streaming_mode = getattr(model, "streaming_mode", False)
     streamer = Streamer(model) if streaming_mode else None
 
-    i = 1
-    for mix, refs, lengths in tqdm(loader, desc="Train", leave=False):
+    pbar = tqdm(loader, total=len(loader), desc="Train", leave=False)
+
+    for i, (mix, refs, lengths) in enumerate(pbar):
         mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
         B, C, _ = mix.shape
 
@@ -57,9 +58,10 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item()
-        print(f"\rBatch {i} average train loss: {total_loss / i:.4f}")
-        i += 1
+        loss_val = loss.item()
+        total_loss += loss_val
+
+        pbar.set_postfix(avg_loss=f"{total_loss / (i+1):.4f}", curr_loss=f"{loss_val:.4f}")
 
     return total_loss / len(loader)
 
@@ -87,6 +89,7 @@ def validate_epoch(
 
             if streaming_mode:
                 ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+                mix = mix[..., streamer.pad_warmup:]
             else:
                 ests = model(mix)
 
