@@ -59,7 +59,7 @@ class TCNSeparator(SubModule):
         # Final 1x1 conv to project back to output_dim channels
         self.output = nn.Sequential(
             nn.PReLU(),
-            nn.Conv1d(bn_dim, output_dim, kernel_size=1)
+            nn.Conv1d(bn_dim, output_dim, kernel_size=1)  # add streaming stride for time downsampling
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

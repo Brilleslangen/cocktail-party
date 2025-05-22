@@ -36,6 +36,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
     streaming_mode = getattr(model, "streaming_mode", False)
     streamer = Streamer(model) if streaming_mode else None
 
+    i = 1
     for mix, refs, lengths in tqdm(loader, desc="Train", leave=False):
         mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
         B, C, _ = mix.shape
@@ -57,6 +58,8 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
         optimizer.step()
 
         total_loss += loss.item()
+        print(f"\rBatch {i} average train loss: {total_loss / i:.4f}")
+        i += 1
 
     return total_loss / len(loader)
 
@@ -68,6 +71,8 @@ def validate_epoch(
     device: torch.device,
 ):
     model.eval()
+    streaming_mode = getattr(model, "streaming_mode", False)
+    streamer = Streamer(model) if streaming_mode else None
     totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i"]}
     total_examples = 0
 
@@ -80,7 +85,11 @@ def validate_epoch(
             elif hasattr(model, "separator") and hasattr(model.separator, "reset_state"):
                 model.separator.reset_state(batch_size=mix.size(0))
 
-            ests = model(mix)
+            if streaming_mode:
+                ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+            else:
+                ests = model(mix)
+
             loss = criterion(ests, refs, lengths)
             B = ests.size(0)
 

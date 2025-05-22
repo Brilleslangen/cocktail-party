@@ -57,9 +57,8 @@ class TasNet(nn.Module):
         self.output_size = ms_to_samples(stream_chunk_size_ms, sample_rate)  # samples of raw audio
         self.sep_context_size = ms_to_samples(self.separator.context_size_ms, sample_rate)  # samples of raw audio
         self.frames_per_context = int(self.separator.context_size_ms // stride_ms)  # number of input frames
-        self.frames_per_output = math.ceil((self.output_size + 2*self.encoder.pad - self.encoder.filter_length)
+        self.frames_per_output = math.ceil((self.output_size + 2*self.decoder.pad - self.decoder.filter_length)
                                            / self.analysis_hop) + 1
-        print('frames per output', self.frames_per_output)
 
     def reset_state(self):
         """
@@ -172,13 +171,6 @@ class TasNet(nn.Module):
         else:
             enc_left = self.encoder(left)
             enc_right = self.encoder(right)
-
-        # print("Encoder input length:", left.shape[-1])
-        # print("Encoder output shape:", enc_left.shape)
-        # print("STFT input length:", left.shape[-1])
-        # print("STFT output shape:", sp_feats.shape)
-        #
-        # print('enc', enc_left.shape, enc_right.shape, sp_feats.shape)
 
         # Fuse features channel-wise
         enc_left, enc_right, sp_feats = crop_to_min_time(enc_left, enc_right, sp_feats)

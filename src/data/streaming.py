@@ -50,10 +50,10 @@ class Streamer:
 
         out_full = torch.cat(out_chunks, dim=-1)
 
-        print('Full shapes:', out_full.shape, refs.shape)
-        est_trimmed = out_full[..., self.pad_warmup:] if trim_warmup else out_full
         ref_trimmed = refs[..., self.pad_warmup:] if trim_warmup else refs
-        lengths_trimmed = lengths - self.pad_warmup
+        est_trimmed = (out_full[..., self.pad_warmup:T] if trim_warmup else out_full[..., :T])
+
+        lengths_trimmed = lengths - self.pad_warmup  # Check this later when we mask and sum
 
         return est_trimmed, ref_trimmed, lengths_trimmed
 

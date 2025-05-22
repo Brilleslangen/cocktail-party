@@ -34,13 +34,13 @@ class TasNetDecoder(SubModule):
 
         # padding ensures perfect overlap-add
         # causal: pad = L-stride; non-causal: symmetric padding = L//2
-        pad = self.filter_length - self.stride if causal else (self.filter_length // 2)
+        self.pad = self.filter_length - self.stride if causal else (self.filter_length // 2)
         self.deconv1d = nn.ConvTranspose1d(
             in_channels=self.num_filters,
             out_channels=self.out_channels,
             kernel_size=self.filter_length,
             stride=self.stride,
-            padding=pad,
+            padding=self.pad,
             bias=False
         )
 
