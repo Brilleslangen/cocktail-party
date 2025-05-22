@@ -18,8 +18,7 @@ scheduler:
   T_mult:    1
   eta_min:   1e-6
 
-criterion:
-  _target_: "src.helpers.si_snr_loss.SISNRLoss"
-  reduction: "mean"
-
 model_save_dir: "artifacts"
+
+defaults:
+  - loss: mse

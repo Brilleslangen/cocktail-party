@@ -1,4 +1,5 @@
 _target_: "src.models.separator.LiquidSeparator"
-
 name: "Liquid"
-num_neurons: 512
+
+context_size_ms: ${model_arch.stream_chunk_size_ms} # length of the data the separator process at each forward pass
+num_neurons: 40

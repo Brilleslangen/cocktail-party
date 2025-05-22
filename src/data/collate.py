@@ -1,30 +1,67 @@
-# src/data/collate.py
+import os
+
 import torch
-from torch.nn.utils.rnn import pad_sequence
+import torch.nn.functional as F
+import torchaudio
+import wandb
+from omegaconf import DictConfig
+from torch.utils.data import DataLoader
+
+from src.data.bucket_sampler import BucketBatchSampler
+from src.data.dataset import AudioDataset
 
 
 def pad_collate(batch):
+    mixes, refs = zip(*batch)
+    lengths = torch.tensor([m.shape[1] for m in mixes], dtype=torch.long)
+    T_max = lengths.max().item()
+
+    # Pad each [2, T_i] to [2, T_max] along last dimension
+    mixes_padded = torch.stack([F.pad(m, (0, T_max - m.size(1))) for m in mixes])
+    refs_padded = torch.stack([F.pad(r, (0, T_max - r.size(1))) for r in refs])
+
+    return mixes_padded, refs_padded, lengths
+
+
+def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     """
-    batch: list of tuples (mix:[2,T_i], left:[T_i], right:[T_i])
-    Returns:
-      mix_p:  [B,2,T_max]
-      left_p: [B,T_max]
-      right_p:[B,T_max]
-      lengths:[T_i list]
+    Build train and val DataLoaders with bucketing and padding.
     """
-    mixes, lefts, rights = zip(*batch)
-    # record original lengths
-    lengths = [m.shape[1] for m in mixes]
-    T_max = max(lengths)
+    run = wandb.run
+    dataset_dir = run.use_artifact(cfg.dataset.artifact_name, type="dataset").download()
+    train_dir = os.path.join(dataset_dir, "train")
+    val_dir = os.path.join(dataset_dir, "val")
 
-    # pad mixtures → [B,2,T_max]
-    # we do pad_sequence on time dimension, so first transpose to [T,2]
-    mixes_t = [m.transpose(0, 1) for m in mixes]  # list of [T_i,2]
-    mix_p = pad_sequence(mixes_t, batch_first=True)  # [B,T_max,2]
-    mix_p = mix_p.transpose(1, 2)  # →[B,2,T_max]
+    train_ds = AudioDataset(train_dir, cfg.model_arch.sample_rate)
+    val_ds = AudioDataset(val_dir, cfg.model_arch.sample_rate)
 
-    # pad left/right → [B,T_max]
-    lefts_p = pad_sequence([l for l in lefts], batch_first=True)
-    rights_p = pad_sequence([r for r in rights], batch_first=True)
+    # compute raw lengths (in samples) for bucketing
+    train_lengths = [torchaudio.info(p).num_frames for p in train_ds.mix_files]
+    val_lengths = [torchaudio.info(p).num_frames for p in val_ds.mix_files]
 
-    return mix_p, lefts_p, rights_p, torch.tensor(lengths, dtype=torch.long)
+    train_sampler = BucketBatchSampler(
+        lengths=train_lengths,
+        batch_size=cfg.training.params.batch_size,
+        n_buckets=cfg.training.params.n_buckets,
+        shuffle=True
+    )
+    val_sampler = BucketBatchSampler(
+        lengths=val_lengths,
+        batch_size=cfg.training.params.batch_size,
+        n_buckets=cfg.training.params.n_buckets,
+        shuffle=False
+    )
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_sampler=train_sampler,
+        collate_fn=pad_collate,
+        num_workers=cfg.training.params.num_workers,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_sampler=val_sampler,
+        collate_fn=pad_collate,
+        num_workers=cfg.training.params.num_workers,
+    )
+    return train_loader, val_loader

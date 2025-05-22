@@ -1,8 +1,15 @@
-_target_: src.models.separator.MambaSeparator
+_target_: "src.models.separator.MambaSeparator"
 
 name: "mamba"
-d_model: ${model_arch.feature_dim}       # Input and output dimension (must match encoder output dim)
-d_state: 16                            # State size for Mamba SSM
-d_conv: 4                                # Local conv width | Should maybe match TCN = 4.0 ms = 64 samples @ 16 kHz
-expand: 2                                # Expansion factor inside Mamba
+
+input_dim: 64
+output_dim: 2   # e.g., 2xD mask for 2 speakers
+d_model: 128
+d_state: 16
+d_conv: 4
+expand: 2
 n_layers: 4
+
+frames_per_output: 64
+streaming_mode: true
+context_size_ms: 32.0

@@ -16,14 +16,14 @@ class TasNetEncoder(SubModule):
         self.filter_length = ms_to_samples(filter_length_ms, sample_rate)
         self.stride = ms_to_samples(stride_ms, sample_rate)
 
-        pad = self.filter_length - self.stride if causal else (self.filter_length // 2)
+        self.pad = self.filter_length - self.stride if causal else (self.filter_length // 2)
 
         self.conv1d = nn.Conv1d(
             in_channels=self.in_channels,
             out_channels=self.num_filters,
             kernel_size=self.filter_length,
             stride=self.stride,
-            padding=pad,
+            padding=self.pad,
             bias=False
         )
 

@@ -1,13 +1,16 @@
 _target_: "src.models.separator.TCNSeparator"
 name: "conv"
 
+streaming_mode: ${model_arch.streaming_mode} # whether to use streaming or non-streaming mode
+
 # Bottleneck and hidden sizes inside the TCN
+context_size_ms:  ${model_arch.window_length_ms} # length of the data the separator process at each forward pass
 bn_dim:           64      # intermediate channels after causalNorm
 hidden_dim:       256     # channels inside each DepthConv1d
 
 # Architectural hyperparameters
-num_layers:       7       # conv blocks per stack
-num_stacks:       5       # how many times to repeat that sequence
+num_layers:       3 #7       # conv blocks per stack
+num_stacks:       2 #5      # how many times to repeat that sequence
 kernel_size:      3       # 1-D conv kernel width
 skip_connection:  true    # whether to use the skip‐connection variant
 causal:           true    # enforce causality in each block
