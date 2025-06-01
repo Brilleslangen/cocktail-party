@@ -16,15 +16,6 @@ from src.helpers import select_device, count_parameters, prettify_param_count, f
 from src.data.streaming import Streamer
 
 
-# TODO:
-#  1. Check what loss should be used. Currently using MSELoss.
-#  5. Need 40000, 10000, and 6000 audio samples for training, validation, and test sets respectively, to replicate
-#  main relevant work (Han et. al 2021: research/papers/system architecture/binaural speech separation).
-#  6. Establish what metrics we need, see if we can use the ones from the original paper. Also I think we should
-#  develop a timer_metric that averages in-to-out time during validation. Less than 10<ms is the goal.
-#  7. Make dataset use the huggingface datasets library. This will allow us to upload the dataset and enable
-#  streaming mode.
-
 def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: torch.optim.Optimizer,
                 device: torch.device):
     """

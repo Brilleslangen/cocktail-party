@@ -37,30 +37,17 @@ class LiquidSeparator(SubModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [B, C, T] where C = input_dim
-        seq = x.permute(0, 2, 1)  # → [B, T, C]
-        h, self.hidden_state = self.cfc(seq, hx=self.hidden_state)
-        h = h.permute(0, 2, 1)     # → [B, C, T]
+        x = x.permute(0, 2, 1)  # Time first
+        out, self.hidden_state = self.cfc(x, hx=self.hidden_state)
+        out = out.permute(0, 2, 1)  # Channel first
 
-        return h
+        return out
 
     def reset_state(self):
         """
         Reset the separator state if it has one.
         """
         self.hidden_state = None
-
-    def detach_state(self):
-        """
-        Detach the separator state if it has one.
-        """
-        print('\ndetaching state l\n')
-        if self.hidden_state is not None:
-            # Detach hidden state to truncate BPTT
-            if isinstance(self.hidden_state, torch.Tensor):
-                self.hidden_state = self.hidden_state.detach()
-                print('Single')
-            else:
-                self.hidden_state = tuple(h.detach() for h in self.hidden_state)
 
     def get_output_dim(self) -> int:
         return self.output_dim
