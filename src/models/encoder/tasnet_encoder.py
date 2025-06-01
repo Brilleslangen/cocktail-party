@@ -27,7 +27,7 @@ class TasNetEncoder(SubModule):
             bias=False
         )
 
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU()  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

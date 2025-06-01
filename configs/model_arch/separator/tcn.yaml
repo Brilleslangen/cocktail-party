@@ -4,9 +4,9 @@ name: "conv"
 streaming_mode: ${model_arch.streaming_mode} # whether to use streaming or non-streaming mode
 
 # Bottleneck and hidden sizes inside the TCN
-context_size_ms:  36.0 # length of the data the separator process at each forward pass
-bn_dim:           64      # intermediate channels after causalNorm
-hidden_dim:       256     # channels inside each DepthConv1d
+context_size_ms:  34.0   # length of the data the separator process at each forward pass
+bn_dim:           20     # intermediate channels after causalNorm
+hidden_dim:       40     # channels inside each DepthConv1d
 
 # Architectural hyperparameters
 num_layers:       3 #7       # conv blocks per stack

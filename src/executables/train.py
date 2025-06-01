@@ -42,9 +42,6 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
         mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
         B, C, _ = mix.shape
 
-        # reset any stateful separator once per sequence
-        model.reset_state()
-
         # forward
         if streaming_mode:
             ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)

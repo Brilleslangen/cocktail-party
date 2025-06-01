@@ -61,14 +61,15 @@ class TasNet(nn.Module):
         self.streaming_mode = streaming_mode  # Size input timespan
         self.input_size = ms_to_samples(max(window_length_ms, self.separator.context_size_ms), sample_rate)
         self.sep_context_size = ms_to_samples(self.separator.context_size_ms, sample_rate)  # samples of raw audio
-        self.frames_per_context = int(self.separator.context_size_ms // stride_ms)  # number of input frames
+        self.frames_per_context = int(self.separator.context_size_ms // stride_ms) + 1  # number of input frames
         print(f'frames_per_context: {self.frames_per_context}, frames_per_output: {self.frames_per_output}')
 
     def reset_state(self):
         """
         Reset the separator state if it has one.
         """
-        # self.separator.reset_state()
+        if hasattr(self.separator, "reset_state"):
+            self.separator.reset_state()
 
     def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
@@ -128,7 +129,7 @@ class TasNet(nn.Module):
             return_complex=True
         )  # [B, F, T]
 
-        # 2) Magnitude & Phase
+        # Magnitude & Phase
         mag_left = stft_left.abs() + eps
         mag_right = stft_right.abs() + eps
         phase_left = torch.angle(stft_left)
@@ -177,7 +178,6 @@ class TasNet(nn.Module):
             enc_right = self.encoder(right)
 
         # Fuse features channel-wise
-        enc_left, enc_right, sp_feats = crop_to_min_time(enc_left, enc_right, sp_feats)
         fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
 
         # Estimate masks

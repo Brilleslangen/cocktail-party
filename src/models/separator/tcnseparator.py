@@ -59,6 +59,7 @@ class TCNSeparator(SubModule):
         # Average pooling to reduce time dimension in streaming mode
         self.streaming_mode = streaming_mode
         self.stream_pool = nn.AdaptiveAvgPool1d(frames_per_output)
+        print('receptive', self.receptive_field)
 
         # Final 1x1 conv to project back to output_dim channels
         self.output = nn.Sequential(
