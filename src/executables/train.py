@@ -44,6 +44,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
         # Backprop
         optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         optimizer.step()
 
         loss_val = loss.item()
@@ -170,7 +171,7 @@ def main(cfg: DictConfig):
         val_stats = validate_epoch(model, val_loader, loss, device)
         time_elapsed = format_time(time.time() - start_time)
 
-        scheduler.step(val_stats["loss"])
+        scheduler.step()
         print(
             f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
             f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f} ")

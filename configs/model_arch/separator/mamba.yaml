@@ -13,4 +13,3 @@ n_layers: 4
 frames_per_output: 64
 streaming_mode: true
 context_size_ms: 32.0
-time_first: true
