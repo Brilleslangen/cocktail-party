@@ -22,3 +22,13 @@ Specifically, our approach involves:
 
 Ultimately, this thesis aims to contribute to the advancement of hearing aid technologies, bridging the gap between computational speech isolation models and practical, real-world applications. By restoring clearer, more natural hearing experiences in challenging social environments, this work seeks to significantly improve the quality of life and social participation for individuals with hearing impairments.
 
+
+## Running Experiments
+To queue all runs for an experiment, pass them as a comma-separated list to `train.py`:
+
+```bash
+source ./venv/bin/activate 
+python -m src.executables.train -m runs=1-offline/liquid,1-offline/mamba,1-offline/tcn
+```
+
+We separate the experiments into respective folders.
