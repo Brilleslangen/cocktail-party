@@ -26,5 +26,9 @@ class AudioDataset(Dataset):
 
         return mixture, clean
 
+    def __len__(self) -> int:
+        """Return number of available samples."""
+        return len(self.mix_files)
+
 
 
