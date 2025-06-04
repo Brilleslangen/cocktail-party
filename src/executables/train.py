@@ -121,7 +121,7 @@ def validate_epoch(
     return totals
 
 
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="runs/1-offline/tcn")
 def main(cfg: DictConfig):
     device = torch.device(select_device())
     torch.manual_seed(cfg.training.params.seed)

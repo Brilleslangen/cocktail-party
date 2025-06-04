@@ -24,11 +24,11 @@ Ultimately, this thesis aims to contribute to the advancement of hearing aid tec
 
 
 ## Running Experiments
-To queue all runs for an experiment, pass them as a comma-separated list to `train.py`:
+To queue runs for an experiment, pass them as a comma-separated list to `train.py`:
 
 ```bash
 source ./venv/bin/activate 
-python -m src.executables.train -m runs=1-offline/liquid,1-offline/mamba,1-offline/tcn
+python -m src.executables.train --config-name=runs/1-offline/tcn, runs/1-offline/liquid, runs/1-offline/mamba
 ```
 
 We separate the experiments into respective folders.

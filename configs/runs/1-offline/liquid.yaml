@@ -1,9 +1,14 @@
+# @package _global_
 defaults:
-  - model_arch: tasnet
-  - dataset: static
-  - training: default
-  - wandb: default
-  - inference: default
-  - override model_arch/separator: liquid
+  - _self_
+  - /model_arch: tasnet            # Architecture selection
+  - /dataset: static_small         # Dataset selection
+  - /training: default
+  - /wandb: default
+  - /inference: default
 
-name: ${model_arch.separator.name}-${model_arch.name}
+  - override /model_arch/separator: liquid
+
+
+
+name: ${model_arch.separator.name}-${model_arch.name}-offline

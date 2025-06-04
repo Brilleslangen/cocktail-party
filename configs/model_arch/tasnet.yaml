@@ -14,5 +14,5 @@ stream_chunk_size_ms: 4.0   # chunk size in ms (must be a multiple of stride_ms)
 
 defaults:
   - encoder: tasnet_encoder
-  - separator: liquid
+  - separator: tcn
   - decoder: tasnet_decoder

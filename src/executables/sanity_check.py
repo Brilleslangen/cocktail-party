@@ -5,12 +5,12 @@ from omegaconf import OmegaConf, DictConfig
 
 
 def test_model_pass(cfg):
-    model = instantiate(cfg.model_arch)
+    print("\n=== Effective Configuration ===")
+    print(OmegaConf.to_yaml(cfg))
 
     print("\n=== TasNet Model Architecture ===")
-    print(model)
-    # print("\n=== Effective Configuration ===")
-    # print(OmegaConf.to_yaml(cfg))
+    model = instantiate(cfg.model_arch)
+
 
     # batch size 2, stereo channels, 32000 samples
     batch, channels, time = 2, 2, 32000
