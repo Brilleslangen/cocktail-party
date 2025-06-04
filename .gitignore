@@ -261,3 +261,4 @@ wandb/
 !configs/wandb/
 !src/data
 artifacts/
+multirun/
