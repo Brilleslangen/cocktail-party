@@ -15,4 +15,5 @@ kernel_size:      3       # 1-D conv kernel width
 skip_connection:  true    # whether to use the skip‐connection variant
 causal:           true    # enforce causality in each block
 dilated:          true    # exponential dilation (2^i) in each layer
+causal_proj: true
 

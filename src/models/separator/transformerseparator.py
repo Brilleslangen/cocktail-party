@@ -28,6 +28,7 @@ class TransformerSeparator(BaseSeparator):
             frames_per_output: int,
             streaming_mode: bool,
             context_size_ms: float,
+            causal_proj: bool,
             name: str = "transformer",
             **kwargs
     ):
@@ -53,7 +54,7 @@ class TransformerSeparator(BaseSeparator):
             streaming_mode=streaming_mode,
             context_size_ms=context_size_ms,
             name=name,
-            causal=True,
+            causal=causal_proj,
             stateful=False,  # Transformer is stateless
             **kwargs
         )

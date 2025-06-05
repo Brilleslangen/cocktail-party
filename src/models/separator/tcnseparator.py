@@ -24,7 +24,7 @@ class TCNSeparator(SubModule):
 
     def __init__(self, input_dim: int, output_dim: int, frames_per_output: int, streaming_mode: bool, name: str,
                  bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int, kernel_size: int,
-                 skip_connection: bool, causal: bool, dilated: bool, context_size_ms: float):
+                 skip_connection: bool, causal: bool, dilated: bool, context_size_ms: float, causal_proj: bool,):
         super().__init__()
 
         # Store dims
@@ -37,7 +37,7 @@ class TCNSeparator(SubModule):
         self.context_size_ms = context_size_ms
 
         # Normalization and bottleneck 1x1 conv
-        self.LN = CausalLayerNorm(input_dim) if causal else nn.GroupNorm(1, input_dim, eps=1e-8)
+        self.LN = CausalLayerNorm(input_dim) if causal_proj else nn.GroupNorm(1, input_dim, eps=1e-8)
         self.BN = nn.Conv1d(input_dim, bn_dim, kernel_size=1, bias=False)
 
         # Build TCN: num_stacks × num_layers of DepthConv1d

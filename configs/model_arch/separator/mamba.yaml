@@ -9,6 +9,7 @@ d_state: 16
 d_conv: 4
 expand: 2
 n_layers: 4
+causal_proj: true
 
 frames_per_output: 64
 streaming_mode: true
