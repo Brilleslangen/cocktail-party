@@ -22,7 +22,6 @@ class TransformerSeparator(BaseSeparator):
             d_ff: int,
             dropout: float,
             local_attention: bool,
-            attention_window_ms: float,
             stride_ms: float,
             sample_rate: int,
             frames_per_output: int,
@@ -38,8 +37,8 @@ class TransformerSeparator(BaseSeparator):
         self.local_attention = local_attention
 
         # Calculate attention window in frames if using local attention
-        if local_attention and attention_window_ms is not None:
-            window_samples = ms_to_samples(attention_window_ms, sample_rate)
+        if local_attention and context_size_ms is not None:
+            window_samples = ms_to_samples(context_size_ms, sample_rate)
             stride_samples = ms_to_samples(stride_ms, sample_rate)
             self.attention_window_frames = max(1, window_samples // stride_samples)
         else:
