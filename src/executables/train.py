@@ -53,7 +53,7 @@ def setup_device_optimizations():
 
     elif device_type == "mps":
         # MPS (Apple Silicon) settings
-        print(f"🍎 MPS device: {platform.processor()}. Mixed precision disabled)")
+        print(f"🍎 MPS device: {platform.processor()}. Mixed precision disabled.")
         use_amp = False
         amp_dtype = torch.float32
 
