@@ -1,88 +1,134 @@
 import torch
 import torch.nn as nn
 from mamba_ssm import Mamba2
-from src.models.submodules import SubModule
+from src.models.separator.base_separator import BaseSeparator
 
 
-class MambaSeparator(SubModule):
+class MambaSeparator(BaseSeparator):
     """
-    Mamba-based separator for binaural feature streams.
-
-    Args:
-        input_dim (int): Number of input channels.
-        output_dim (int): Number of output channels (e.g., 2 x D masks).
-        d_model (int): Internal model dimension of Mamba2.
-        d_state (int): State dimension of Mamba2.
-        d_conv (int): Convolutional kernel size for Mamba2.
-        expand (int): Expansion factor inside Mamba2.
-        n_layers (int): Number of stacked Mamba2 blocks.
-        frames_per_output (int): Target number of output frames (used in streaming mode).
-        streaming_mode (bool): Whether to apply pooling for online processing.
-        context_size_ms (float): Context used for documentation or receptive field estimation.
-        name (str): Module identifier.
+    Mamba-2 based separator using stateful state-space models.
     """
 
     def __init__(
-        self,
-        input_dim: int,
-        output_dim: int,
-        d_model: int,
-        d_state: int,
-        d_conv: int,
-        expand: int,
-        n_layers: int,
-        frames_per_output: int,
-        streaming_mode: bool,
-        context_size_ms: float,
-        name: str,
+            self,
+            input_dim: int,
+            output_dim: int,
+            d_model: int,
+            n_blocks: int,
+            d_state: int,
+            d_conv: int,
+            expand: int,
+            frames_per_output: int,
+            streaming_mode: bool,
+            context_size_ms: float,
+            name: str,
+            **kwargs
     ):
-        super().__init__()
-        self.name = name
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.context_size_ms = context_size_ms
-        self.streaming_mode = streaming_mode
+        self.d_state = d_state
+        self.d_conv = d_conv
+        self.expand = expand
 
-        self.input_proj = nn.Conv1d(input_dim, d_model, kernel_size=1)
-
-        self.mamba_layers = nn.Sequential(
-            *[
-                Mamba2(
-                    d_model=d_model,
-                    d_state=d_state,
-                    d_conv=d_conv,
-                    expand=expand
-                )
-                for _ in range(n_layers)
-            ]
+        super().__init__(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            d_model=d_model,
+            n_blocks=n_blocks,
+            frames_per_output=frames_per_output,
+            streaming_mode=streaming_mode,
+            context_size_ms=context_size_ms,
+            name=name,
+            causal=True,
+            stateful=True,  # Mamba is stateful
+            **kwargs
         )
 
-        self.stream_pool = nn.AdaptiveAvgPool1d(frames_per_output)
+        # Hidden states for each block
+        self.hidden_states = [None] * n_blocks
 
-        self.output_proj = nn.Sequential(
-            nn.PReLU(),
-            nn.Conv1d(d_model, output_dim, kernel_size=1)
+    def _build_block(self, block_idx: int) -> nn.Module:
+        return MambaBlock(
+            d_model=self.d_model,
+            d_state=self.d_state,
+            d_conv=self.d_conv,
+            expand=self.expand
         )
+
+    def reset_state(self):
+        """Reset all hidden states."""
+        self.hidden_states = [None] * self.n_blocks
+
+    def detach_state(self):
+        """Detach hidden states to truncate BPTT."""
+        for i in range(self.n_blocks):
+            if self.hidden_states[i] is not None:
+                if isinstance(self.hidden_states[i], torch.Tensor):
+                    self.hidden_states[i] = self.hidden_states[i].detach()
+                else:
+                    # Mamba2 might return tuple of states
+                    self.hidden_states[i] = tuple(h.detach() if h is not None else None
+                                                  for h in self.hidden_states[i])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Override to handle stateful processing."""
+        # Input normalization and projection
+        x = self.input_norm(x)
+        x = self.input_proj(x)  # [B, d_model, T]
+
+        # Pass through stacked blocks with residual connections
+        for i, block in enumerate(self.blocks):
+            residual = x
+            x, self.hidden_states[i] = block(x, self.hidden_states[i])
+            x = x + residual  # Residual connection
+
+        # Apply streaming pool if needed
+        if self.streaming_mode and self.stream_pool is not None:
+            x = self.stream_pool(x)
+
+        # Output projection
+        return self.output_proj(x)
+
+
+class MambaBlock(nn.Module):
+    """
+    A single stateful Mamba-2 block with LayerNorm and residual connection.
+    """
+
+    def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int):
+        super().__init__()
+
+        self.norm = nn.LayerNorm(d_model)
+        self.mamba = Mamba2(
+            d_model=d_model,
+            d_state=d_state,
+            d_conv=d_conv,
+            expand=expand
+        )
+
+    def forward(self, x: torch.Tensor, hidden_state=None):
         """
         Args:
-            x (Tensor): Input of shape [B, input_dim, T]
+            x: [B, d_model, T]
+            hidden_state: Hidden state from previous chunk
         Returns:
-            Tensor: Output of shape [B, output_dim, T'] (may be reduced if streaming)
+            Output with same shape and updated hidden state
         """
-        x = self.input_proj(x)      # [B, d_model, T]
-        x = x.transpose(1, 2)       # [B, T, d_model]
-        x = self.mamba_layers(x)    # [B, T, d_model]
-        x = x.transpose(1, 2)       # [B, d_model, T]
+        # Transpose for Mamba: [B, C, T] -> [B, T, C]
+        x_t = x.transpose(1, 2)
 
-        if self.streaming_mode:
-            x = self.stream_pool(x)  # [B, d_model, frames_per_output]
+        # Apply norm (PreNorm)
+        x_norm = self.norm(x_t)
 
-        return self.output_proj(x)   # [B, output_dim, T']
+        # Apply Mamba with state handling
+        if hidden_state is not None:
+            # Mamba2 supports passing initial states
+            x_out, new_hidden = self.mamba(x_norm, initial_states=hidden_state)
+        else:
+            # First chunk - no initial state
+            x_out = self.mamba(x_norm)
+            # Extract final states for next chunk
+            # Note: This assumes Mamba2 exposes a way to get final states
+            # You may need to adapt based on actual Mamba2 API
+            new_hidden = getattr(self.mamba, 'final_states', None)
 
-    def get_input_dim(self) -> int:
-        return self.input_dim
-
-    def get_output_dim(self) -> int:
-        return self.output_dim
+        # Transpose back: [B, T, C] -> [B, C, T]
+        return x_out.transpose(1, 2), new_hidden
