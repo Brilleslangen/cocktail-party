@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from src.data.bucket_sampler import BucketBatchSampler
 from src.data.dataset import AudioDataset
-from src.helpers import autopin_memory
+from src.helpers import using_cuda
 
 
 def pad_collate(batch):
@@ -32,7 +32,7 @@ def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     dataset_dir = run.use_artifact(cfg.dataset.artifact_name, type="dataset").download()
     train_dir = os.path.join(dataset_dir, "train")
     val_dir = os.path.join(dataset_dir, "val")
-    pin_memory = autopin_memory()
+    pin_memory = using_cuda()
 
     train_ds = AudioDataset(train_dir, cfg.model_arch.sample_rate)
     val_ds = AudioDataset(val_dir, cfg.model_arch.sample_rate)

@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 from src.models.submodules import SubModule
+from src.models.separator.base_separator import CausalLayerNorm
 
 
 class TCNSeparator(SubModule):
@@ -181,47 +182,3 @@ class DepthConv1d(nn.Module):
             return res, skip
         return res
 
-
-class CausalLayerNorm(nn.Module):
-    """
-    Cumulative LayerNorm along the time axis for causal processing.
-
-    Maintains running mean/var per frame to avoid peeking into the future.
-    """
-
-    def __init__(self, dimension: int, eps: float = 1e-8):
-        super().__init__()
-        self.eps = eps
-        self.gain = nn.Parameter(torch.ones(1, dimension, 1))
-        self.bias = nn.Parameter(torch.zeros(1, dimension, 1))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x (torch.Tensor): [batch, channels, time]
-        Returns:
-            torch.Tensor: same shape, normalized causally per channel.
-        """
-        B, C, T = x.size()
-        # sum over channels → [B, T]
-        sum_ = x.sum(dim=1)
-        sum_sq = x.pow(2).sum(dim=1)
-
-        # cumulative sums in time
-        cum_sum = torch.cumsum(sum_, dim=1)
-        cum_sqsum = torch.cumsum(sum_sq, dim=1)
-
-        # entry counts: [1, T], repeated per batch
-        cnt = torch.arange(C, C * (T + 1), C, device=x.device, dtype=x.dtype)
-        cnt = cnt.unsqueeze(0).expand(B, T)
-
-        # compute mean/var
-        mean = cum_sum / cnt
-        var = (cum_sqsum - 2 * mean * cum_sum) / cnt + mean.pow(2)
-        std = (var + self.eps).sqrt()
-
-        # reshape & apply
-        mean = mean.unsqueeze(1)
-        std = std.unsqueeze(1)
-        norm = (x - mean) / std
-        return norm * self.gain + self.bias

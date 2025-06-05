@@ -20,7 +20,7 @@ from typing import Any
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def run_inference(cfg: DictConfig):
-    device = torch.device(select_device())
+    device = select_device()
 
     # Determine checkpoint path via W&B Artifact or local file
     if cfg.wandb.enabled:

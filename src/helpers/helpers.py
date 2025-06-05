@@ -11,7 +11,7 @@ def select_device():
         return torch.device("cpu")
 
 
-def autopin_memory():
+def using_cuda():
     """
     Automatically pin memory if CUDA is available.
     Returns True if pinning is enabled, False otherwise.

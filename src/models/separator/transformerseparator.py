@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from src.models.separator.base_separator import BaseSeparator
 from src.helpers import ms_to_samples
 
@@ -8,6 +9,7 @@ class TransformerSeparator(BaseSeparator):
     """
     Transformer-based separator using causal multi-head self-attention.
     Supports both local (windowed) attention and full attention modes.
+    Uses FlashAttention-2 when available via PyTorch's scaled_dot_product_attention.
     """
 
     def __init__(
@@ -19,7 +21,6 @@ class TransformerSeparator(BaseSeparator):
             n_heads: int,
             d_ff: int,
             dropout: float = 0.1,
-            causal: bool = True,
             local_attention: bool = True,
             attention_window_ms: float = None,
             stride_ms: float = 2.0,
@@ -37,7 +38,6 @@ class TransformerSeparator(BaseSeparator):
 
         # Calculate attention window in frames if using local attention
         if local_attention and attention_window_ms is not None:
-            # Convert ms to samples, then to frames
             window_samples = ms_to_samples(attention_window_ms, sample_rate)
             stride_samples = ms_to_samples(stride_ms, sample_rate)
             self.attention_window_frames = max(1, window_samples // stride_samples)
@@ -58,13 +58,43 @@ class TransformerSeparator(BaseSeparator):
             **kwargs
         )
 
+        # Check if FlashAttention is available
+        self._check_flash_attention()
+
+    def _check_flash_attention(self):
+        """Check if FlashAttention-2 is available and will be used."""
+        if torch.cuda.is_available():
+            # PyTorch 2.0+ automatically uses FlashAttention when available
+            # Check if the current CUDA device supports it
+            device_capability = torch.cuda.get_device_capability()
+            if device_capability[0] >= 8:  # Ampere or newer (compute capability 8.0+)
+                print(f"✓ FlashAttention-2 available on {torch.cuda.get_device_name()}")
+            else:
+                print(f"⚠ FlashAttention-2 not available on {torch.cuda.get_device_name()} "
+                      f"(requires compute capability 8.0+, got {device_capability[0]}.{device_capability[1]})")
+
+        # Verify scaled_dot_product_attention is available
+        if hasattr(F, 'scaled_dot_product_attention'):
+            # Check which backends are available
+            from torch.backends.cuda import sdp_kernel
+            if torch.cuda.is_available():
+                with sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False) as context:
+                    try:
+                        # Test if flash attention can be used
+                        test_q = torch.randn(1, 8, 16, 64, device='cuda', dtype=torch.float16)
+                        test_k = test_v = test_q
+                        _ = F.scaled_dot_product_attention(test_q, test_k, test_v)
+                        print("✓ FlashAttention-2 kernel confirmed available")
+                    except:
+                        print("⚠ FlashAttention-2 kernel not available, will use memory-efficient attention")
+
     def _build_block(self, block_idx: int) -> nn.Module:
         return TransformerBlock(
             d_model=self.d_model,
             n_heads=self.n_heads,
             d_ff=self.d_ff,
             dropout=self.dropout,
-            causal=False,
+            causal=True,
             local_attention=self.local_attention,
             attention_window=self.attention_window_frames
         )
@@ -72,8 +102,8 @@ class TransformerSeparator(BaseSeparator):
 
 class TransformerBlock(nn.Module):
     """
-    A single Transformer block with causal self-attention and FFN.
-    Supports both local (windowed) attention and full attention.
+    Transformer block with FlashAttention-2 support.
+    Uses PreNorm architecture for better training stability.
     """
 
     def __init__(
@@ -83,23 +113,24 @@ class TransformerBlock(nn.Module):
             d_ff: int,
             dropout: float,
             causal: bool,
-            local_attention: bool = True,
+            local_attention: bool = False,
             attention_window: int = None
     ):
         super().__init__()
         self.causal = causal
+        self.n_heads = n_heads
         self.local_attention = local_attention
         self.attention_window = attention_window
+        self.d_model = d_model
+        self.head_dim = d_model // n_heads
 
-        # Multi-head self-attention
-        self.self_attn = nn.MultiheadAttention(
-            embed_dim=d_model,
-            num_heads=n_heads,
-            dropout=dropout,
-            batch_first=True
-        )
+        assert d_model % n_heads == 0, f"d_model ({d_model}) must be divisible by n_heads ({n_heads})"
 
-        # Layer norms
+        # Multi-head attention components
+        self.qkv_proj = nn.Linear(d_model, 3 * d_model, bias=False)
+        self.out_proj = nn.Linear(d_model, d_model)
+
+        # Layer norms (PreNorm)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
 
@@ -114,69 +145,67 @@ class TransformerBlock(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def _create_attention_mask(self, seq_len: int, device: torch.device) -> torch.Tensor:
-        """
-        Create attention mask based on causality and local attention settings.
+    def _create_attention_mask(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+        """Create attention mask for local attention window."""
+        mask = torch.zeros(seq_len, seq_len, device=device, dtype=dtype)
 
-        Args:
-            seq_len: Sequence length
-            device: Device to create mask on
-
-        Returns:
-            Attention mask of shape [seq_len, seq_len]
-        """
-        # Start with causal mask if needed
-        if self.causal:
-            # Upper triangular matrix (future positions masked)
-            mask = torch.triu(
-                torch.ones(seq_len, seq_len, device=device) * float('-inf'),
-                diagonal=1
-            )
-        else:
-            mask = torch.zeros(seq_len, seq_len, device=device)
-
-        # Apply local attention window if specified
         if self.local_attention and self.attention_window is not None:
-            # Create local attention mask
             for i in range(seq_len):
-                # Each position can only attend to positions within the window
                 start = max(0, i - self.attention_window + 1)
-                # Mask positions outside the window
                 if start > 0:
                     mask[i, :start] = float('-inf')
 
         return mask
 
-    def _get_attention_mask(self, seq_len: int, device: torch.device) -> torch.Tensor:
-        # Cache mask per (seq_len, device)
-        if not hasattr(self, "_mask_cache"):
-            self._mask_cache = {}
-        key = (seq_len, device)
-        if key not in self._mask_cache:
-            self._mask_cache[key] = self._create_attention_mask(seq_len, device)
-        return self._mask_cache[key]
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: [B, T, d_model]
+            x: [B, d_model, T] (from base separator)
         Returns:
-            Output with same shape
+            Output with same shape [B, d_model, T]
         """
-        # Transpose for attention: [B, T, d_model] -> [B, T]
+        # Transpose to [B, T, d_model] for processing (like other models except TCN)
+        x = x.transpose(1, 2)
         B, T, C = x.shape
 
-        # Create attention mask
-        attn_mask = self._get_attention_mask(T, x.device)
+        # Pre-norm and compute QKV
+        x_norm = self.norm1(x)
+        qkv = self.qkv_proj(x_norm)  # [B, T, 3*d_model]
 
-        # Self-attention with residual
-        attn_out, _ = self.self_attn(x, x, x, attn_mask=attn_mask)
+        # Reshape QKV for multi-head attention
+        qkv = qkv.reshape(B, T, 3, self.n_heads, self.head_dim)
+        qkv = qkv.permute(2, 0, 3, 1, 4)  # [3, B, n_heads, T, head_dim]
+        q, k, v = qkv[0], qkv[1], qkv[2]  # Each: [B, n_heads, T, head_dim]
+
+        # Prepare attention mask
+        attn_mask = None
+        if self.local_attention and self.attention_window is not None:
+            # Local attention needs explicit mask
+            attn_mask = self._create_attention_mask(T, x.device, x.dtype)
+            is_causal = False  # Use explicit mask
+        else:
+            # For full causal attention, let SDPA handle it efficiently
+            is_causal = self.causal
+
+        # Apply scaled dot-product attention (uses FlashAttention when available)
+        attn_out = F.scaled_dot_product_attention(
+            q, k, v,
+            attn_mask=attn_mask,
+            dropout_p=self.dropout.p if self.training else 0.0,
+            is_causal=is_causal
+        )  # [B, n_heads, T, head_dim]
+
+        # Reshape and project output
+        attn_out = attn_out.transpose(1, 2).contiguous()  # [B, T, n_heads, head_dim]
+        attn_out = attn_out.reshape(B, T, C)  # [B, T, d_model]
+        attn_out = self.out_proj(attn_out)
+
+        # Residual connection
         x = x + self.dropout(attn_out)
-        x = self.norm1(x)
 
-        # FFN with residual
-        ffn_out = self.ffn(x)
-        x = x + ffn_out
-        x = self.norm2(x)
+        # FFN with pre-norm and residual
+        x_norm2 = self.norm2(x)
+        x = x + self.ffn(x_norm2)
 
-        return x  # [B, T, d_model]
+        # Transpose back to [B, d_model, T] for base separator
+        return x.transpose(1, 2)

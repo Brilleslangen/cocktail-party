@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from abc import abstractmethod
 from src.models.submodules import SubModule
-from src.models.separator.tcnseparator import CausalLayerNorm
 
 
 class BaseSeparator(SubModule):
@@ -77,29 +76,31 @@ class BaseSeparator(SubModule):
                    For stateless models in streaming: T_out = chunk_frames (last portion)
                    For stateful models in streaming: T_out = chunk_frames (same as input)
                    For offline mode: T_out = T
+
+        Note: Base separator maintains [B, C, T] format throughout.
+              Individual models handle transposition internally if needed.
         """
         # Input normalization and projection
         x = self.input_norm(x)
         x = self.input_proj(x)  # [B, d_model, T]
-        x = x.transpose(1, 2)  # [B, T, d_model]
 
         # Pass through stacked blocks with residual connections
+        # Each block handles its own format internally
         for block in self.blocks:
             residual = x
             x = block(x)
             x = x + residual  # Residual connection
 
         # Output projection
-        x = x.transpose(1, 2)  # [B, d_model, T]
         x = self.output_proj(x)  # [B, output_dim, T]
 
         # Handle streaming output sizing
         if self.streaming_mode and not self.stateful:
             # Stateless models: slice the last chunk from the context window
-            # Preserves exact temporal alignment without averaging
+            # This preserves exact temporal alignment without averaging
             if self.frames_per_output < x.size(-1):
                 x = x[..., -self.frames_per_output:]
-        # Stateful models output the full chunk - no slicing needed
+        # Note: Stateful models output the full chunk as-is (no slicing needed)
 
         return x
 
@@ -108,3 +109,42 @@ class BaseSeparator(SubModule):
 
     def get_output_dim(self) -> int:
         return self.output_dim
+
+
+class CausalLayerNorm(nn.Module):
+    """
+    Causal LayerNorm that only uses past and present statistics.
+    """
+
+    def __init__(self, normalized_shape: int, eps: float = 1e-5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(1, normalized_shape, 1))
+        self.bias = nn.Parameter(torch.zeros(1, normalized_shape, 1))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: [B, C, T]
+        Returns:
+            Normalized x with same shape
+        """
+        B, C, T = x.shape
+
+        # Compute cumulative statistics
+        cumsum = torch.cumsum(x, dim=-1)
+        cumsum_sq = torch.cumsum(x.pow(2), dim=-1)
+
+        # Count of elements up to each position
+        count = torch.arange(1, T + 1, device=x.device, dtype=x.dtype)
+        count = count.view(1, 1, T).expand(B, 1, T)
+
+        # Compute running mean and variance
+        mean = cumsum / count
+        var = (cumsum_sq / count) - mean.pow(2)
+
+        # Normalize
+        x_norm = (x - mean) / (var + self.eps).sqrt()
+
+        return x_norm * self.weight + self.bias

@@ -1,5 +1,4 @@
 import math
-import time
 from typing import Tuple, Any
 import torch
 import torch.nn as nn
@@ -162,7 +161,6 @@ class TasNet(nn.Module):
             right_out (torch.Tensor): [batch, time_samples]
         """
         # Pad for alignment in offline mode
-        start_time = time.time()
         mixture, rest = (mixture, None) if self.streaming_mode else self.pad_signal(mixture)
         # print('rest', rest)
         left, right = mixture[:, 0], mixture[:, 1]
