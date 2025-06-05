@@ -1,6 +1,12 @@
 _target_: "src.models.separator.LiquidSeparator"
-name: "Liquid"
+name: "liquid"
 
-context_size_ms: ${model_arch.stream_chunk_size_ms} # length of the data the separator process at each forward pass
-num_neurons: 40
-num_layers: 4
+streaming_mode: ${model_arch.streaming_mode}
+context_size_ms: ${model_arch.stream_chunk_size_ms}
+
+# Model dimensions
+d_model: 128          # Internal model dimension
+n_blocks: 4           # Number of liquid blocks
+num_neurons: 40       # Number of neurons in liquid network
+
+causal_proj: true
