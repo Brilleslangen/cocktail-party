@@ -147,6 +147,15 @@ class TransformerBlock(nn.Module):
 
         return mask
 
+    def _get_attention_mask(self, seq_len: int, device: torch.device) -> torch.Tensor:
+        # Cache mask per (seq_len, device)
+        if not hasattr(self, "_mask_cache"):
+            self._mask_cache = {}
+        key = (seq_len, device)
+        if key not in self._mask_cache:
+            self._mask_cache[key] = self._create_attention_mask(seq_len, device)
+        return self._mask_cache[key]
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
@@ -158,7 +167,7 @@ class TransformerBlock(nn.Module):
         B, T, C = x.shape
 
         # Create attention mask
-        attn_mask = self._create_attention_mask(T, x.device)
+        attn_mask = self._get_attention_mask(T, x.device)
 
         # Self-attention with residual
         attn_out, _ = self.self_attn(x, x, x, attn_mask=attn_mask)
