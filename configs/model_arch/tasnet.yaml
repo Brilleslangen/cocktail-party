@@ -9,7 +9,7 @@ window_length_ms: 32.0      # STFT window length (512 samples @16 kHz)
 stride_ms: 2.0              # STFT hop length (32 samples @16 kHz)
 sample_rate: 16000          # sample rate
 
-streaming_mode: true        # Process entire audio stream (offline) or process in chunks (online)
+streaming_mode: false        # Process entire audio stream (offline) or process in chunks (online)
 stream_chunk_size_ms: 4.0   # chunk size in ms (must be a multiple of stride_ms)
 
 defaults:

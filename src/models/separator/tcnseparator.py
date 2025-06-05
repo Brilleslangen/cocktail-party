@@ -36,7 +36,7 @@ class TCNSeparator(SubModule):
         self.context_size_ms = context_size_ms
 
         # Normalization and bottleneck 1x1 conv
-        self.LN = cLN(input_dim) if causal else nn.GroupNorm(1, input_dim, eps=1e-8)
+        self.LN = CausalLayerNorm(input_dim) if causal else nn.GroupNorm(1, input_dim, eps=1e-8)
         self.BN = nn.Conv1d(input_dim, bn_dim, kernel_size=1, bias=False)
 
         # Build TCN: num_stacks × num_layers of DepthConv1d
@@ -144,8 +144,8 @@ class DepthConv1d(nn.Module):
         self.nonlinearity2 = nn.PReLU()
 
         # Normalization after depthwise
-        self.reg1 = cLN(hidden_channel) if causal else nn.GroupNorm(1, hidden_channel, eps=1e-8)
-        self.reg2 = cLN(hidden_channel) if causal else nn.GroupNorm(1, hidden_channel, eps=1e-8)
+        self.reg1 = CausalLayerNorm(hidden_channel) if causal else nn.GroupNorm(1, hidden_channel, eps=1e-8)
+        self.reg2 = CausalLayerNorm(hidden_channel) if causal else nn.GroupNorm(1, hidden_channel, eps=1e-8)
 
         # Residual and skip 1x1 convs
         self.res_out = nn.Conv1d(hidden_channel, input_channel, kernel_size=1)
@@ -182,7 +182,7 @@ class DepthConv1d(nn.Module):
         return res
 
 
-class cLN(nn.Module):
+class CausalLayerNorm(nn.Module):
     """
     Cumulative LayerNorm along the time axis for causal processing.
 

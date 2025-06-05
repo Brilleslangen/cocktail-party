@@ -1,0 +1,19 @@
+_target_: "src.models.separator.TransformerSeparator"
+name: "transformer"
+
+streaming_mode: ${model_arch.streaming_mode}
+context_size_ms: ${model_arch.stream_chunk_size_ms}
+
+# Model dimensions
+d_model: 128          # Internal model dimension
+n_blocks: 4           # Number of transformer blocks
+n_heads: 8            # Number of attention heads
+d_ff: 512             # Feed-forward dimension
+dropout: 0.1          # Dropout rate
+
+# Attention configuration - FULL ATTENTION MODE
+local_attention: false   # Disable local attention for full sequence attention
+attention_window_ms: null # Not used when local_attention is false
+
+# This configuration allows the transformer to attend to the entire sequence,
+# suitable for offline processing where we have access to the full audio
