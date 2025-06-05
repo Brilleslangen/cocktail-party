@@ -27,6 +27,9 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
     streaming_mode = getattr(model, "streaming_mode", False)
     streamer = Streamer(model) if streaming_mode else None
 
+    use_amp = device.type == "cuda"
+    scaler = torch.cuda.amp.GradScaler() if use_amp else None
+
     pbar = tqdm(loader, total=len(loader), desc="Train", leave=False)
 
     for i, (mix, refs, lengths) in enumerate(pbar):
@@ -34,18 +37,26 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss, optimizer: 
         B, C, _ = mix.shape
 
         # forward
-        if streaming_mode:
-            ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+        if use_amp:
+            with torch.cuda.amp.autocast():
+                if streaming_mode:
+                    ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+                else:
+                    ests = model(mix)
+                loss = loss_fn(ests, refs, lengths)
+            scaler.scale(loss).backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+            scaler.step(optimizer)
+            scaler.update()
         else:
-            ests = model(mix)
-
-        loss = loss_fn(ests, refs, lengths)
-
-        # Backprop
-        optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-        optimizer.step()
+            if streaming_mode:
+                ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+            else:
+                ests = model(mix)
+            loss = loss_fn(ests, refs, lengths)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+            optimizer.step()
 
         loss_val = loss.item()
         total_loss += loss_val

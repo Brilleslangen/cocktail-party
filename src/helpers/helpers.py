@@ -11,6 +11,14 @@ def select_device():
         return torch.device("cpu")
 
 
+def autopin_memory():
+    """
+    Automatically pin memory if CUDA is available.
+    Returns True if pinning is enabled, False otherwise.
+    """
+    return torch.cuda.is_available() and torch.backends.cudnn.is_available()
+
+
 def ms_to_samples(ms, sample_rate=16000) -> int:
     """
     Convert milliseconds to samples.
@@ -60,5 +68,3 @@ def format_time(seconds: float) -> str:
         hours, remainder = divmod(seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{hours}h {minutes}m {seconds}s"
-
-
