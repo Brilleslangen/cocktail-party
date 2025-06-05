@@ -124,6 +124,9 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
 
         pbar.set_postfix(avg_loss=f"{total_loss / (i + 1):.4f}", curr_loss=f"{loss_val:.4f}")
 
+        if model.separator.stateful:
+            model.reset_state()
+
     return total_loss / len(loader)
 
 
