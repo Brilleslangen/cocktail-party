@@ -24,8 +24,6 @@ class Streamer:
     def reset(self, batch_size: int, channels: int):
         """Zero the ring‐buffer and reset any model state."""
         self.buffer = torch.zeros(batch_size, channels, self.buffer_size, device=self.device)
-        if hasattr(self.model, 'reset_state'):
-            self.model.reset_state()
 
     def push(self, new_chunk: Tensor) -> Optional[Tensor]:
         """
