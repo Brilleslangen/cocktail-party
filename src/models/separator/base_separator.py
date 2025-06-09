@@ -23,12 +23,13 @@ class BaseSeparator(SubModule):
             output_dim: int,
             d_model: int,
             n_blocks: int,
+            d_ff: int,
+            dropout: float,
             frames_per_output: int,
             streaming_mode: bool,
             context_size_ms: float,
             name: str,
             causal: bool = True,
-            stateful: bool = False,
             **kwargs
     ):
         super().__init__()
@@ -36,11 +37,12 @@ class BaseSeparator(SubModule):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.d_model = d_model
+        self.d_ff = d_ff
+        self.dropout = dropout
         self.n_blocks = n_blocks
         self.streaming_mode = streaming_mode
         self.context_size_ms = context_size_ms
         self.causal = causal
-        self.stateful = stateful
         self.frames_per_output = frames_per_output
         self.hidden_states = [None] * n_blocks
 
@@ -52,10 +54,12 @@ class BaseSeparator(SubModule):
         self.blocks = nn.ModuleList([
             self._build_block(block_idx=i) for i in range(n_blocks)
         ])
+        self.stateful = self.blocks[0].stateful if n_blocks > 0 else False
 
         # Output projection
         self.output_proj = nn.Sequential(nn.PReLU(), nn.Linear(d_model, output_dim))
 
+    @abstractmethod
     def _build_block(self, block_idx: int) -> nn.Module:
         """Build a single separator block. Must be implemented by subclasses."""
         pass
@@ -84,13 +88,13 @@ class BaseSeparator(SubModule):
             if self.stateful:
                 x, self.hidden_states[i] = block(x, self.hidden_states[i])
             else:
-                x = block(x)
+                x, _ = block(x)
 
         # Output projection
         x = self.output_proj(x)  # [B, T, output_dim]
 
         # Handle streaming output sizing
-        if self.stateful:
+        if self.streaming_mode and self.stateful:
             assert x.size(-1) == self.frames_per_output, \
                 f"Stateful separator must output same-sized chunk. Got {x.size(-1)}, expected {self.frames_per_output}."
 
@@ -135,11 +139,12 @@ def build_FFN(d_model: int, d_ff: int, dropout: float) -> nn.Sequential:
     )
 
 
-class GeneralResidualBlock(nn.Module):
-    def __init__(self, d_model: int, d_ff: int, dropout: float, causal: bool, post_core_gelu: bool):
+class ResidualBlock(nn.Module):
+    def __init__(self, d_model: int, d_ff: int, dropout: float, causal: bool, post_core_gelu: bool, stateful: bool):
         super().__init__()
         self.d_model = d_model
         self.causal = causal
+        self.stateful = stateful
 
         # Choose LayerNorm based on causality
         Norm = CausalLayerNorm if self.causal else nn.LayerNorm
@@ -159,13 +164,18 @@ class GeneralResidualBlock(nn.Module):
         Abstract method to build the core layer of the block.
         Should be implemented by subclasses to return the specific core layer.
         """
-        raise NotImplementedError("Subclasses must implement _build_core_layer method.")
+        raise NotImplementedError("Subclasses muswt implement _build_core_layer method.")
 
-    def forward(self, x):
-        # Core layer + (gelu) + Linear + Dropout + Residual
+    def forward(self, x, hidden_state=None):
+        # Core layer (+ gelu) + Linear + Dropout + Residual
         residual = x
         x = self.norm1(x)
-        x = self.core(x)
+
+        if self.stateful:
+            x, hidden_state = self.core(x, hidden_state)
+        else:
+            x = self.core(x)
+
         x = self.post_core_gelu(x) if self.post_core_gelu else x
         x = self.linear1(x)
         x = self.dropout1(x)
@@ -177,7 +187,7 @@ class GeneralResidualBlock(nn.Module):
         x = self.ffn(x)
         x = x + residual
 
-        return x
+        return x, hidden_state
 
 
 class CausalLayerNorm(nn.Module):

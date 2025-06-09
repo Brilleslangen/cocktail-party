@@ -23,11 +23,11 @@ class TCNSeparator(SubModule):
     """
 
     def __init__(self, input_dim: int, output_dim: int, frames_per_output: int, streaming_mode: bool, name: str,
-                 bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int, kernel_size: int, stateful: bool,
+                 bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int, kernel_size: int,
                  skip_connection: bool, causal: bool, dilated: bool, context_size_ms: float, causal_proj: bool,
                  dropout: float):
         super().__init__()
-        self.stateful = stateful
+        self.stateful = False
         self.streaming_mode = streaming_mode
         self.frames_per_output = frames_per_output
 

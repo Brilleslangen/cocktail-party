@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models.separator.base_separator import BaseSeparator, build_FFN, GeneralResidualBlock
+from src.models.separator.base_separator import BaseSeparator, build_FFN, ResidualBlock
 from src.helpers import ms_to_samples
 
 
@@ -32,8 +32,6 @@ class TransformerSeparator(BaseSeparator):
             **kwargs
     ):
         self.n_heads = n_heads
-        self.d_ff = d_ff
-        self.dropout = dropout
         self.local_attention = local_attention
 
         # Calculate attention window in frames if using local attention
@@ -49,12 +47,13 @@ class TransformerSeparator(BaseSeparator):
             output_dim=output_dim,
             d_model=d_model,
             n_blocks=n_blocks,
+            d_ff=d_ff,
+            dropout=dropout,
             frames_per_output=frames_per_output,
             streaming_mode=streaming_mode,
             context_size_ms=context_size_ms,
             name=name,
             causal=causal_proj,
-            stateful=False,  # Transformer is stateless
             **kwargs
         )
 
@@ -100,7 +99,7 @@ class TransformerSeparator(BaseSeparator):
         )
 
 
-class TransformerBlock(GeneralResidualBlock):
+class TransformerBlock(ResidualBlock):
     """
     Transformer block with FlashAttention-2 support.
     Uses PreNorm architecture for better training stability.
@@ -121,7 +120,7 @@ class TransformerBlock(GeneralResidualBlock):
         self.attention_window = attention_window
         self.head_dim = d_model // n_heads
         self.dropout = dropout
-        super().__init__(d_model, d_ff, dropout, causal, post_core_gelu=False)
+        super().__init__(d_model, d_ff, dropout, causal, post_core_gelu=False, stateful=False)
 
     def _build_core_layer(self) -> nn.Module:
         return MultiHeadAttention(
