@@ -65,25 +65,6 @@ class LiquidSeparator(BaseSeparator):
                 else:
                     self.hidden_states[i] = tuple(h.detach() for h in self.hidden_states[i])
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Override to handle stateful processing."""
-        # Input normalization and projection
-        x = self.input_norm(x)
-        x = self.input_proj(x)  # [B, d_model, T]
-
-        # Pass through stacked blocks with residual connections
-        for i, block in enumerate(self.blocks):
-            residual = x
-            x, self.hidden_states[i] = block(x, self.hidden_states[i])
-            x = x + residual  # Residual connection
-
-        # Apply streaming pool if needed
-        if self.streaming_mode and self.stream_pool is not None:
-            x = self.stream_pool(x)
-
-        # Output projection
-        return self.output_proj(x)
-
 
 class LiquidBlock(nn.Module):
     """

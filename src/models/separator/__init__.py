@@ -1,9 +1,9 @@
-from .tcnseparator import TCNSeparator
-from .liquidseparator import LiquidSeparator
-from .transformerseparator import TransformerSeparator
+from src.models.separator.stateful.liquid_separator import LiquidSeparator
+from src.models.separator.stateless.transformer_separator import TransformerSeparator
+from src.models.separator.stateless.tcn_separator import TCNSeparator
 
 try:
-    from .mambaseparator import MambaSeparator
+    from src.models.separator.stateful.mamba_separator import MambaSeparator
 except ImportError:
     # If mamba_ssm is not installed, we can still use TCNSeparator
     YELLOW = "\033[93m"  # bright yellow

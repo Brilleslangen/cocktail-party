@@ -1,0 +1,14 @@
+_target_: "src.models.separator.S4Separator"
+name: "s4"
+
+streaming_mode: ${model_arch.streaming_mode}
+context_size_ms: ${model_arch.stream_chunk_size_ms}  # Only used for TasNet frame calculations
+
+# Model dimensions
+d_model: 128          # Internal model dimension
+n_blocks: 4           # Number of S4 blocks
+d_state: 64           # State dimension
+lr: 0.001             # Learning rate for S5 kernel
+dropout: 0.0          # Dropout rate
+
+# Note: S4 is always stateful and processes data continuously without context windows

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models.separator.base_separator import BaseSeparator
+from src.models.separator.base_separator import BaseSeparator, build_FFN, GeneralResidualBlock
 from src.helpers import ms_to_samples
 
 
@@ -100,7 +100,7 @@ class TransformerSeparator(BaseSeparator):
         )
 
 
-class TransformerBlock(nn.Module):
+class TransformerBlock(GeneralResidualBlock):
     """
     Transformer block with FlashAttention-2 support.
     Uses PreNorm architecture for better training stability.
@@ -109,41 +109,49 @@ class TransformerBlock(nn.Module):
     def __init__(
             self,
             d_model: int,
-            n_heads: int,
             d_ff: int,
             dropout: float,
             causal: bool,
+            n_heads: int,
             local_attention: bool = False,
             attention_window: int = None
     ):
-        super().__init__()
-        self.causal = causal
         self.n_heads = n_heads
         self.local_attention = local_attention
         self.attention_window = attention_window
-        self.d_model = d_model
         self.head_dim = d_model // n_heads
+        self.dropout = dropout
+        super().__init__(d_model, d_ff, dropout, causal, post_core_gelu=False)
+
+    def _build_core_layer(self) -> nn.Module:
+        return MultiHeadAttention(
+            d_model=self.d_model,
+            n_heads=self.n_heads,
+            dropout=self.dropout,
+            causal=self.causal,
+            local_attention=self.local_attention,
+        )
+
+
+class MultiHeadAttention(nn.Module):
+    """
+    Multi-head attention layer with optional casual (+local) attention.
+    Uses FlashAttention-2 when available.
+    """
+
+    def __init__(self, d_model: int, n_heads: int, dropout: float, causal: bool, local_attention: bool = False):
+        super().__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
+        self.dropout = nn.Dropout(dropout)
+        self.local_attention = local_attention
+        self.causal = causal
 
         assert d_model % n_heads == 0, f"d_model ({d_model}) must be divisible by n_heads ({n_heads})"
 
-        # Multi-head attention components
         self.qkv_proj = nn.Linear(d_model, 3 * d_model, bias=False)
         self.out_proj = nn.Linear(d_model, d_model)
-
-        # Layer norms (PreNorm)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-
-        # Feed-forward network
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model),
-            nn.Dropout(dropout)
-        )
-
-        self.dropout = nn.Dropout(dropout)
 
     def _create_attention_mask(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         """Create attention mask for local attention window."""
@@ -158,19 +166,8 @@ class TransformerBlock(nn.Module):
         return mask
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: [B, d_model, T] (from base separator)
-        Returns:
-            Output with same shape [B, d_model, T]
-        """
-        # Transpose to [B, T, d_model] for processing (like other models except TCN)
-        x = x.transpose(1, 2)
         B, T, C = x.shape
-
-        # Pre-norm and compute QKV
-        x_norm = self.norm1(x)
-        qkv = self.qkv_proj(x_norm)  # [B, T, 3*d_model]
+        qkv = self.qkv_proj(x)  # [B, T, 3*d_model]
 
         # Reshape QKV for multi-head attention
         qkv = qkv.reshape(B, T, 3, self.n_heads, self.head_dim)
@@ -198,14 +195,5 @@ class TransformerBlock(nn.Module):
         # Reshape and project output
         attn_out = attn_out.transpose(1, 2).contiguous()  # [B, T, n_heads, head_dim]
         attn_out = attn_out.reshape(B, T, C)  # [B, T, d_model]
-        attn_out = self.out_proj(attn_out)
 
-        # Residual connection
-        x = x + self.dropout(attn_out)
-
-        # FFN with pre-norm and residual
-        x_norm2 = self.norm2(x)
-        x = x + self.ffn(x_norm2)
-
-        # Transpose back to [B, d_model, T] for base separator
-        return x.transpose(1, 2)
+        return self.out_proj(attn_out)

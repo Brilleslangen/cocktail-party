@@ -179,7 +179,7 @@ class TasNet(nn.Module):
         fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
 
         # Estimate masks
-        masks = self.separator(fused)
+        masks = self.separator(fused)   # [B, 2D, T_frames]
         mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
 
         if self.streaming_mode:

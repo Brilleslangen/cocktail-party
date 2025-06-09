@@ -19,7 +19,7 @@ from src.data.streaming import Streamer
 
 def setup_device_optimizations():
     """Configure device-specific optimizations."""
-    device = torch.device(select_device())
+    device = select_device()
     device_type = device.type
 
     # Device-specific settings

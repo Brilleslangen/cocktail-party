@@ -3,6 +3,8 @@ name: "transformer"
 
 streaming_mode: ${model_arch.streaming_mode}
 context_size_ms: ${model_arch.stream_chunk_size_ms}
+sample_rate: ${model_arch.sample_rate}
+stride_ms: ${model_arch.stride_ms}
 
 # Model dimensions
 d_model: 128          # Internal model dimension
