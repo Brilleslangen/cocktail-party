@@ -69,7 +69,7 @@ for exp in "${EXPERIMENTS[@]}"; do
 
 # Load modules
 module purge
-module load Python/3.10.8-GCCcore-12.2.0
+module load Python/3.11.3-GCCcore-12.3.0
 module load CUDA/12.1.1
 module load cuDNN/8.9.2.26-CUDA-12.1.1
 

@@ -21,5 +21,6 @@ srun --partition=gpu \
 
 # The above command will give you an interactive shell on a GPU node
 # Once you're in, you can:
-# 1. source ~/projects/cocktail-party/activate.sh
-# 2. Run your training/debugging commands interactively
+# 1. module load Python/3.11.3-GCCcore-12.3.0 CUDA/12.1.1 cuDNN/8.9.2.26-CUDA-12.1.1
+# 2. source ~/projects/cocktail-party/activate.sh
+# 3. Run your training/debugging commands interactively

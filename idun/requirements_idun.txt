@@ -1,0 +1,30 @@
+# requirements_idun.txt - Specific versions tested on IDUN cluster
+# Install PyTorch first with CUDA 12.1 support, then use this file
+
+# Core dependencies
+hydra-core==1.3.2
+numpy~=2.0.0  # Compatible with Python 3.11
+omegaconf==2.3.0
+scipy>=1.10.0  # More flexible version constraint
+soundfile==0.12.1
+tqdm==4.67.1
+
+# CUDA-dependent packages (ensure CUDA module is loaded)
+# For mamba-ssm, use: pip install --no-build-isolation mamba-ssm[causal-conv1d]
+
+# Monitoring and logging
+wandb>=0.15.0  # More flexible version constraint
+
+# Metrics
+torchmetrics[audio]>=1.0.0  # More flexible version constraint
+
+# Neural architectures
+ncps>=0.0.7  # More flexible version constraint
+
+# Profiling
+thop==0.1.1.post2209072238
+
+# Optional but recommended for cluster
+tensorboard==2.15.1
+matplotlib==3.8.2
+seaborn==0.13.0

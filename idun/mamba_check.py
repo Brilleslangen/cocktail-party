@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""
+check_mamba.py - Quick check if mamba-ssm is properly installed
+"""
+import sys
+
+print("🐍 Checking Mamba-SSM installation...")
+print("-" * 40)
+
+# Check Python version
+print(f"Python version: {sys.version}")
+if sys.version_info < (3, 11):
+    print("❌ Python 3.11+ required for mamba-ssm!")
+    sys.exit(1)
+else:
+    print("✅ Python version OK")
+
+# Check CUDA
+try:
+    import torch
+
+    if torch.cuda.is_available():
+        print(f"✅ CUDA available: {torch.version.cuda}")
+        print(f"   Device: {torch.cuda.get_device_name()}")
+    else:
+        print("❌ CUDA not available!")
+except ImportError:
+    print("❌ PyTorch not installed!")
+    sys.exit(1)
+
+# Check causal-conv1d
+try:
+    import causal_conv1d
+
+    print("✅ causal-conv1d imported successfully")
+except ImportError as e:
+    print(f"❌ causal-conv1d import failed: {e}")
+
+# Check mamba-ssm
+try:
+    import mamba_ssm
+
+    print("✅ mamba-ssm imported successfully")
+
+    # Try to create a simple Mamba2 layer
+    from mamba_ssm import Mamba2
+
+    layer = Mamba2(d_model=16)
+    print("✅ Mamba2 layer created successfully")
+
+    # Test forward pass
+    x = torch.randn(1, 10, 16).cuda()
+    y = layer(x)
+    print("✅ Forward pass successful")
+
+    print("\n🎉 Mamba-SSM is properly installed and working!")
+
+except ImportError as e:
+    print(f"❌ mamba-ssm import failed: {e}")
+    print("\nTo install mamba-ssm:")
+    print("1. Ensure Python 3.11+ and CUDA modules are loaded")
+    print("2. Run: pip install --no-build-isolation mamba-ssm[causal-conv1d]")
+    sys.exit(1)
+except Exception as e:
+    print(f"❌ Error testing Mamba: {e}")
+    sys.exit(1)
