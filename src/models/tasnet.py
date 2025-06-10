@@ -23,7 +23,7 @@ class TasNet(nn.Module):
 
     def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, sample_rate: int,
                  window_length_ms: float, stride_ms: float, streaming_mode: bool, stream_chunk_size_ms: float,
-                 filter_length_ms, **kwargs: Any):
+                 filter_length_ms, use_spatial_features: bool, **kwargs: Any):
         super().__init__()
 
         # -------------------------------------------------------------------
@@ -31,6 +31,7 @@ class TasNet(nn.Module):
         # -------------------------------------------------------------------
         self.encoder: SubModule = instantiate(encoder)
         self.decoder: SubModule = instantiate(decoder)
+        self.use_spatial_features = use_spatial_features
 
         # -------------------------------------------------------------------
         # STFT parameters for spatial features
@@ -44,7 +45,9 @@ class TasNet(nn.Module):
         # -------------------------------------------------------------------
         D = self.encoder.get_output_dim()  # number of encoder filters
         F = self.analysis_window // 2 + 1  # number of STFT freq bins
-        sep_input_dim = 2 * D + 3 * F  # [left; right; spatial]
+        sep_input_dim = 2 * D  # left and right channels encoded
+        if self.use_spatial_features:
+            sep_input_dim += 3 * F  # [left; right; spatial]
         sep_output_dim = 2 * D  # two masks of size D
 
         # Separator streaming params
@@ -165,21 +168,27 @@ class TasNet(nn.Module):
         # print('rest', rest)
         left, right = mixture[:, 0], mixture[:, 1]
 
-        sp_feats = self.compute_spatial_features(left, right)
+        sp_feats = None
+        if self.use_spatial_features:
+            sp_feats = self.compute_spatial_features(left, right)
 
         if self.streaming_mode:
             enc_left = self.encoder(left[..., -self.sep_context_size:])
             enc_right = self.encoder(right[..., -self.sep_context_size:])
-            sp_feats = sp_feats[..., -self.frames_per_context:]
+            if sp_feats is not None:
+                sp_feats = sp_feats[..., -self.frames_per_context:]
         else:
             enc_left = self.encoder(left)
             enc_right = self.encoder(right)
 
         # Fuse features channel-wise
-        fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
+        if sp_feats is not None:
+            fused = torch.cat([enc_left, enc_right, sp_feats], dim=1)  # [B, 2D+3F, T_frames]
+        else:
+            fused = torch.cat([enc_left, enc_right], dim=1)
 
         # Estimate masks
-        masks = self.separator(fused)   # [B, 2D, T_frames]
+        masks = self.separator(fused)  # [B, 2D, T_frames]
         mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
 
         if self.streaming_mode:
