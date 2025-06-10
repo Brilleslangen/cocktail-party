@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 check_mamba.py - Quick check if mamba-ssm is properly installed
@@ -41,15 +42,17 @@ try:
     import mamba_ssm
 
     print("✅ mamba-ssm imported successfully")
-
-    # Try to create a simple Mamba2 layer
     from mamba_ssm import Mamba2
 
-    layer = Mamba2(d_model=16)
+    print("✅ Mamba2 imported successfully")
+
+    # Try to create a simple Mamba2 layer
+    layer = Mamba2(d_model=128,d_state=64, d_conv=4, expand=2).to('cuda')    # Block expansion factor
     print("✅ Mamba2 layer created successfully")
 
     # Test forward pass
-    x = torch.randn(1, 10, 16).cuda()
+    x = torch.randn(8, 320, 128).cuda()
+    print(x.shape, x.stride())  # Make sure stride[0] and stride[2] are multiples of 8
     y = layer(x)
     print("✅ Forward pass successful")
 
@@ -62,5 +65,6 @@ except ImportError as e:
     print("2. Run: pip install --no-build-isolation mamba-ssm[causal-conv1d]")
     sys.exit(1)
 except Exception as e:
-    print(f"❌ Error testing Mamba: {e}")
-    sys.exit(1)
+    import traceback
+    print("❌ Error testing Mamba:")
+    traceback.print_exc()
