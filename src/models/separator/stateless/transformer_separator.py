@@ -20,7 +20,7 @@ class TransformerSeparator(BaseSeparator):
             n_blocks: int,
             n_heads: int,
             d_ff: int,
-            dropout: float,
+            dropout_val: float,
             local_attention: bool,
             stride_ms: float,
             sample_rate: int,
@@ -48,7 +48,7 @@ class TransformerSeparator(BaseSeparator):
             d_model=d_model,
             n_blocks=n_blocks,
             d_ff=d_ff,
-            dropout=dropout,
+            dropout_val=dropout_val,
             frames_per_output=frames_per_output,
             streaming_mode=streaming_mode,
             context_size_ms=context_size_ms,
@@ -65,7 +65,7 @@ class TransformerSeparator(BaseSeparator):
             d_model=self.d_model,
             n_heads=self.n_heads,
             d_ff=self.d_ff,
-            dropout=self.dropout,
+            dropout_val=self.dropout,
             causal=True,
             local_attention=self.local_attention,
             attention_window=self.attention_window_frames
@@ -82,7 +82,7 @@ class TransformerBlock(ResidualBlock):
             self,
             d_model: int,
             d_ff: int,
-            dropout: float,
+            dropout_val: float,
             causal: bool,
             n_heads: int,
             local_attention: bool = False,
@@ -92,14 +92,13 @@ class TransformerBlock(ResidualBlock):
         self.local_attention = local_attention
         self.attention_window = attention_window
         self.head_dim = d_model // n_heads
-        self.dropout = dropout
-        super().__init__(d_model, d_ff, dropout, causal, post_core_gelu=False, stateful=False)
+        super().__init__(d_model, d_ff, dropout_val, causal, post_core_gelu=False, stateful=False)
 
     def _build_core_layer(self) -> nn.Module:
         return MultiHeadAttention(
             d_model=self.d_model,
             n_heads=self.n_heads,
-            dropout=self.dropout,
+            dropout=self.dropout_val,
             causal=self.causal,
             local_attention=self.local_attention,
         )

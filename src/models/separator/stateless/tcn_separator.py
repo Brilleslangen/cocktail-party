@@ -25,7 +25,7 @@ class TCNSeparator(SubModule):
     def __init__(self, input_dim: int, output_dim: int, frames_per_output: int, streaming_mode: bool, name: str,
                  bn_dim: int, hidden_dim: int, num_layers: int, num_stacks: int, kernel_size: int,
                  skip_connection: bool, causal: bool, dilated: bool, context_size_ms: float, causal_proj: bool,
-                 dropout: float):
+                 dropout_val: float):
         super().__init__()
         self.stateful = False
         self.streaming_mode = streaming_mode
@@ -57,7 +57,7 @@ class TCNSeparator(SubModule):
                     dilation=dilation,
                     skip=skip_connection,
                     causal=causal,
-                    dropout=dropout,
+                    dropout=dropout_val,
                 )
                 # Track total receptive field in frames
                 self.receptive_field += (kernel_size - 1) * dilation if (i or s) else kernel_size

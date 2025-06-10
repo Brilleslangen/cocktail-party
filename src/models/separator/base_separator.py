@@ -24,7 +24,7 @@ class BaseSeparator(SubModule):
             d_model: int,
             n_blocks: int,
             d_ff: int,
-            dropout: float,
+            dropout_val: float,
             frames_per_output: int,
             streaming_mode: bool,
             context_size_ms: float,
@@ -38,7 +38,7 @@ class BaseSeparator(SubModule):
         self.output_dim = output_dim
         self.d_model = d_model
         self.d_ff = d_ff
-        self.dropout = dropout
+        self.dropout = dropout_val
         self.n_blocks = n_blocks
         self.streaming_mode = streaming_mode
         self.context_size_ms = context_size_ms
@@ -140,11 +140,12 @@ def build_FFN(d_model: int, d_ff: int, dropout: float) -> nn.Sequential:
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, d_model: int, d_ff: int, dropout: float, causal: bool, post_core_gelu: bool, stateful: bool):
+    def __init__(self, d_model: int, d_ff: int, dropout_val: float, causal: bool, post_core_gelu: bool, stateful: bool):
         super().__init__()
         self.d_model = d_model
         self.causal = causal
         self.stateful = stateful
+        self.dropout_val = dropout_val
 
         # Choose LayerNorm based on causality
         Norm = CausalLayerNorm if self.causal else nn.LayerNorm
@@ -153,10 +154,10 @@ class ResidualBlock(nn.Module):
         self.core = self._build_core_layer()  # Multi-Head Attention, S4, Mamba or Liquid
         self.post_core_gelu = nn.GELU() if post_core_gelu else None
         self.linear1 = nn.Linear(d_model, d_model)
-        self.dropout1 = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(dropout_val)
 
         self.norm2 = Norm(d_model)
-        self.ffn = build_FFN(d_model, d_ff, dropout)
+        self.ffn = build_FFN(d_model, d_ff, dropout_val)
 
     @abstractmethod
     def _build_core_layer(self) -> nn.Module:

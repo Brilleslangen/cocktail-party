@@ -16,6 +16,6 @@ skip_connection:  true    # whether to use the skip‐connection variant
 causal:           true    # enforce causality in each block
 dilated:          true    # exponential dilation (2^i) in each layer
 causal_proj: true
-dropout: 0.1     # dropout rate in the DepthConv1d blocks
+dropout_val: 0.1     # dropout rate in the DepthConv1d blocks
 
 

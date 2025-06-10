@@ -11,7 +11,7 @@ d_model: 128          # Internal model dimension
 n_blocks: 4           # Number of transformer blocks
 n_heads: 8            # Number of attention heads
 d_ff: 512             # Feed-forward dimension
-dropout: 0.1          # Dropout rate
+dropout_val: 0.1          # Dropout rate
 causal_proj: true
 
 # Attention configuration - FULL ATTENTION MODE

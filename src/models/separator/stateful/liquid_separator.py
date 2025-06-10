@@ -17,7 +17,7 @@ class LiquidSeparator(BaseSeparator):
             d_model: int,
             n_blocks: int,
             d_ff: int,
-            dropout: float,
+            dropout_val: float,
             num_neurons: int,
             frames_per_output: int,
             streaming_mode: bool,
@@ -35,7 +35,7 @@ class LiquidSeparator(BaseSeparator):
             d_model=d_model,
             n_blocks=n_blocks,
             d_ff=d_ff,
-            dropout=dropout,
+            dropout_val=dropout_val,
             frames_per_output=frames_per_output,
             streaming_mode=streaming_mode,
             context_size_ms=context_size_ms,
@@ -49,7 +49,7 @@ class LiquidSeparator(BaseSeparator):
             d_model=self.d_model,
             num_neurons=self.num_neurons,
             d_ff=self.d_ff,
-            dropout=self.dropout,
+            dropout_val=self.dropout,
             causal=self.causal,
         )
 
@@ -59,11 +59,9 @@ class LiquidBlock(ResidualBlock):
     A single Liquid Neural Network block with CfC neurons.
     """
 
-    def __init__(self, d_model: int, num_neurons: int, d_ff: int, dropout: float, causal: bool):
-        self.d_model = d_model
+    def __init__(self, d_model: int, num_neurons: int, d_ff: int, dropout_val: float, causal: bool):
         self.num_neurons = num_neurons
-
-        super().__init__(d_model, d_ff, dropout, causal, post_core_gelu=False, stateful=True)
+        super().__init__(d_model, d_ff, dropout_val, causal, post_core_gelu=False, stateful=True)
 
     def _build_core_layer(self) -> nn.Module:
         wiring = AutoNCP(self.num_neurons, self.d_model)
