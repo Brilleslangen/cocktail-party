@@ -11,7 +11,7 @@ module purge
 module load Python/3.10.8-GCCcore-12.2.0  # Adjust version as available
 module load CUDA/12.1.1  # Required for mamba-ssm and PyTorch
 module load cuDNN/8.9.2.26-CUDA-12.1.1  # For deep learning
-module load git/2.38.1-GCCcore-12.2.0
+module load git/2.45.1-GCCcore-13.3.0
 
 # Create project directory structure
 PROJECT_NAME="cocktail-party"
