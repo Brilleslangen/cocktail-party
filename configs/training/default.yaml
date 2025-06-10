@@ -18,6 +18,10 @@ scheduler:
   T_mult:    1
   eta_min:   1e-6
 
+early_stopping:
+  patience: 10
+  min_delta: 0.0
+
 model_save_dir: "artifacts"
 print_config: false
 

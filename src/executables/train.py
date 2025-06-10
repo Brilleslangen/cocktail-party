@@ -266,6 +266,13 @@ def main(cfg: DictConfig):
     best_metric_value = -float("inf")
     best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
 
+    # Early stopping setup
+    patience = cfg.training.early_stopping.patience
+    min_delta = cfg.training.early_stopping.min_delta
+    best_val_loss = float("inf")
+    epochs_no_improve = 0
+    epochs_trained = 0
+
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         start_time = time.time()
         train_loss = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype)
@@ -273,9 +280,21 @@ def main(cfg: DictConfig):
         time_elapsed = format_time(time.time() - start_time)
 
         scheduler.step()
+        epochs_trained = epoch
         print(
             f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
             f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f} ")
+
+        # Early stopping check
+        if val_stats["loss"] < best_val_loss - min_delta:
+            best_val_loss = val_stats["loss"]
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= patience:
+            print(f"Early stopping triggered at epoch {epoch}.")
+            break
 
         if cfg.wandb.enabled:
             wandb.log({
@@ -305,6 +324,7 @@ def main(cfg: DictConfig):
     # upload the best‐metric model to W&B
     if cfg.wandb.enabled and best_ckpt_path is not None:
         wandb.run.summary[f"best/{best_metric_name}"] = best_metric_value
+        wandb.run.summary["epochs_trained"] = epochs_trained
         art = wandb.Artifact(run_name, type="model")
         art.add_file(best_ckpt_path)
         wandb.log_artifact(art)
