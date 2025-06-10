@@ -37,6 +37,47 @@ def count_parameters(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+def count_macs(model: nn.Module, seconds: float = 1.0) -> int:
+    """Return MACs needed to process ``seconds`` of audio.
+
+    For streaming models we profile a single context window of length
+    ``model.input_size`` and multiply by the number of windows required to
+    cover ``seconds`` seconds. This allows fair comparison with offline mode
+    where the full signal is processed in one pass.
+    """
+    from thop import profile
+
+    device = next(model.parameters()).device
+    sample_rate = getattr(model, "sample_rate", 16000)
+    frames = int(sample_rate * seconds)
+
+    streaming = getattr(model, "streaming_mode", False)
+    if streaming:
+        window = getattr(model, "input_size", frames)
+        chunk = getattr(model, "output_size", frames)
+        dummy = torch.randn(1, 2, window, device=device)
+        macs_per_window, _ = profile(model, inputs=(dummy,), verbose=False)
+        windows_per_second = sample_rate / chunk
+        macs = macs_per_window * windows_per_second
+    else:
+        dummy = torch.randn(1, 2, frames, device=device)
+        macs, _ = profile(model, inputs=(dummy,), verbose=False)
+
+    return int(macs)
+
+
+def prettify_macs(macs: float) -> str:
+    """Convert MAC count per second to a human readable string."""
+    if macs < 1e6:
+        return f"{macs / 1e3:.2f}K MAC/s"
+    elif macs < 1e9:
+        return f"{macs / 1e6:.2f}M MAC/s"
+    elif macs < 1e12:
+        return f"{macs / 1e9:.2f}G MAC/s"
+    else:
+        return f"{macs / 1e12:.2f}T MAC/s"
+
+
 def prettify_param_count(param_count: int) -> str:
     """
     Convert parameter count to a human-readable format.

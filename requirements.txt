@@ -4,11 +4,11 @@ omegaconf==2.3.0
 scipy==1.15.2
 soundfile==0.13.1
 torch~=2.7.1
+torchaudio~=2.7.0
 tqdm==4.67.1
 causal-conv1d==1.5.0.post8
 mamba-ssm==2.2.4
-torchaudio~=2.7.0
 wandb==0.19.11
-
 torchmetrics[audio]~=1.7.1
-ncps~=1.0.1g
+ncps~=1.0.1
+thop==0.1.1.post2209072238

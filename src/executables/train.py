@@ -13,7 +13,14 @@ from torch.utils.data import DataLoader
 
 from src.data.collate import setup_train_dataloaders
 from src.evaluate import Loss, compute_mask, batch_si_snr, batch_snr
-from src.helpers import select_device, count_parameters, prettify_param_count, format_time
+from src.helpers import (
+    select_device,
+    count_parameters,
+    count_macs,
+    prettify_macs,
+    prettify_param_count,
+    format_time,
+)
 from src.data.streaming import Streamer
 from src.evaluate.loss import MaskedMSELoss
 
@@ -234,11 +241,17 @@ def main(cfg: DictConfig):
 
     # Calculate composite figures and init wandb
     param_count = count_parameters(model)
+    macs = count_macs(model)
+    pretty_macs = prettify_macs(macs)
     pretty_param_count = prettify_param_count(param_count)
     run_name = f"{cfg.name}_{pretty_param_count}"
 
+    print('Pretty MACs:', pretty_macs)
+
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     cfg_dict["model_arch"]["param_count"] = param_count
+    cfg_dict["model_arch"]["macs"] = macs
+    cfg_dict["model_arch"]["pretty_macs"] = pretty_macs
     cfg_dict["device"] = str(device)
     cfg_dict["mixed_precision"] = use_amp
     cfg_dict["amp_dtype"] = str(amp_dtype) if use_amp else None
@@ -255,6 +268,8 @@ def main(cfg: DictConfig):
             reinit='finish_previous'
         )
         wandb.run.summary["model/param_count"] = param_count
+        wandb.run.summary["model/macs_per_second"] = macs
+        wandb.run.summary["model/macs_pretty"] = pretty_macs
 
     if cfg.training.print_config:
         print(OmegaConf.to_yaml(cfg))
