@@ -11,7 +11,7 @@ module purge
 module load Python/3.10.8-GCCcore-12.2.0  # Adjust version as available
 module load CUDA/12.1.1  # Required for mamba-ssm and PyTorch
 module load cuDNN/8.9.2.26-CUDA-12.1.1  # For deep learning
-module load git/2.45.1-GCCcore-13.3.0
+module swap GCCcore/12.2.0 GCCcore/13.3.0
 
 # Create project directory structure
 PROJECT_NAME="cocktail-party"
@@ -23,7 +23,7 @@ cd "$PROJECT_DIR"
 if [ ! -d ".git" ]; then
     echo "📦 Cloning repository..."
     # Try SSH first (recommended if SSH keys are set up)
-    if git clone git@github.com:YOUR_USERNAME/YOUR_REPO.git . 2>/dev/null; then
+    if git clone git@github.com:brilleslangen/cocktail-party.git . 2>/dev/null; then
         echo "✅ Repository cloned via SSH"
     else
         echo "⚠️  SSH clone failed, trying HTTPS..."
