@@ -95,7 +95,7 @@ class BaseSeparator(SubModule):
 
         # Handle streaming output sizing
         if self.streaming_mode and self.stateful:
-            assert x.size(-1) == self.frames_per_output, \
+            assert x.size(1) == self.frames_per_output, \
                 f"Stateful separator must output same-sized chunk. Got {x.size(-1)}, expected {self.frames_per_output}."
 
         if self.streaming_mode and self.frames_per_output < x.size(-1):

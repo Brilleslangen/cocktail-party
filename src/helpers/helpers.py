@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import warnings
 
 
 def select_device():
@@ -56,12 +57,20 @@ def count_macs(model: nn.Module, seconds: float = 1.0) -> int:
         window = getattr(model, "input_size", frames)
         chunk = getattr(model, "output_size", frames)
         dummy = torch.randn(1, 2, window, device=device)
-        macs_per_window, _ = profile(model, inputs=(dummy,), verbose=False)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="This API is being deprecated", module="thop"
+            )
+            macs_per_window, _ = profile(model, inputs=(dummy,), verbose=False)
         windows_per_second = sample_rate / chunk
         macs = macs_per_window * windows_per_second
     else:
         dummy = torch.randn(1, 2, frames, device=device)
-        macs, _ = profile(model, inputs=(dummy,), verbose=False)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="This API is being deprecated", module="thop"
+            )
+            macs, _ = profile(model, inputs=(dummy,), verbose=False)
 
     return int(macs)
 
