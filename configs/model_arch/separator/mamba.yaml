@@ -1,16 +1,18 @@
 _target_: "src.models.separator.MambaSeparator"
-
 name: "mamba"
+
+streaming_mode: ${model_arch.streaming_mode}
+context_size_ms: ${model_arch.stream_chunk_size_ms}
 
 input_dim: 64
 output_dim: 2   # e.g., 2xD mask for 2 speakers
 d_model: 128
+n_blocks: 4
+d_ff: 512
+dropout_val: 0.1
 d_state: 16
 d_conv: 4
 expand: 2
-n_layers: 4
 causal_proj: true
 
 frames_per_output: 64
-streaming_mode: true
-context_size_ms: 32.0
