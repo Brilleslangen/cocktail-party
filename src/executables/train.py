@@ -15,6 +15,7 @@ from src.data.collate import setup_train_dataloaders
 from src.evaluate import Loss, compute_mask, batch_si_snr, batch_snr
 from src.helpers import select_device, count_parameters, prettify_param_count, format_time
 from src.data.streaming import Streamer
+from src.evaluate.loss import MaskedMSELoss
 
 
 def setup_device_optimizations():
@@ -75,8 +76,10 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
     """
     model.train()
     total_loss = 0.0
+    total_mse_loss = 0.0
     streaming_mode = getattr(model, "streaming_mode", False)
     streamer = Streamer(model) if streaming_mode else None
+    mse_loss_fn = MaskedMSELoss()
 
     # Setup mixed precision
     scaler = torch.cuda.amp.GradScaler() if (use_amp and device.type == "cuda") else None
@@ -94,6 +97,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 else:
                     ests = model(mix)
                 loss = loss_fn(ests, refs, lengths)
+                mse_loss = mse_loss_fn()
 
             # Backward with gradient scaling
             scaler.scale(loss).backward()
@@ -114,15 +118,19 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 ests = model(mix)
 
             loss = loss_fn(ests, refs, lengths)
+            mse_loss = mse_loss_fn(ests, refs, lengths)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             optimizer.zero_grad()
 
         loss_val = loss.item()
+        mse_loss_val = mse_loss.item()
         total_loss += loss_val
+        total_mse_loss += mse_loss_val
 
-        pbar.set_postfix(avg_loss=f"{total_loss / (i + 1):.4f}", curr_loss=f"{loss_val:.4f}")
+        pbar.set_postfix(avg_loss=f"{total_loss / (i + 1):.4f}", curr_loss=f"{loss_val:.4f}",
+                         avg_mse=f"{total_mse_loss / (i + 1):.4f}", curr_mse=f"{mse_loss_val:.4f}")
 
         if model.separator.stateful:
             model.reset_state()
@@ -264,7 +272,7 @@ def main(cfg: DictConfig):
         val_stats = validate_epoch(model, val_loader, loss, device, use_amp, amp_dtype)
         time_elapsed = format_time(time.time() - start_time)
 
-        scheduler.step(val_stats["loss"])
+        scheduler.step()
         print(
             f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
             f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f} ")
