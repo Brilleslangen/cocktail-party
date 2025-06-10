@@ -8,10 +8,10 @@ echo "🚀 Setting up Cocktail Party project on IDUN..."
 
 # Load required modules (adjust versions as needed for IDUN)
 module purge
-module load Python/3.10.8-GCCcore-12.2.0  # Adjust version as available
-module load CUDA/12.1.1  # Required for mamba-ssm and PyTorch
+module load Python/3.11.3-GCCcore-12.3.0
+module load CUDA/12.1.1 # or CUDA/12.6.0 if available on IDUN!
 module load cuDNN/8.9.2.26-CUDA-12.1.1  # For deep learning
-module swap GCCcore/12.2.0 GCCcore/13.3.0
+module swap GCCcore/12.3.0 GCCcore/13.3.0
 
 # Create project directory structure
 PROJECT_NAME="cocktail-party"
@@ -61,7 +61,7 @@ pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https
 # Install mamba-ssm and causal-conv1d (requires CUDA)
 echo "🐍 Installing Mamba dependencies..."
 pip install causal-conv1d==1.4.0
-pip install mamba-ssm==2.2.4
+pip install --no-build-isolation mamba-ssm[causal-conv1d]
 
 # Install remaining requirements
 echo "📦 Installing remaining requirements..."
@@ -93,7 +93,7 @@ cat > "$PROJECT_DIR/activate.sh" << EOF
 #!/bin/bash
 # Quick activation script
 module purge
-module load Python/3.10.8-GCCcore-12.2.0
+module load Python/3.11.3-GCCcore-12.3.0
 module load CUDA/12.1.1
 module load cuDNN/8.9.2.26-CUDA-12.1.1
 
@@ -115,3 +115,4 @@ echo "Next steps:"
 echo "1. Ensure W&B API key is set in your environment"
 echo "2. Test the setup: python test_setup.py"
 echo "3. Submit training jobs using the SLURM scripts"
+
