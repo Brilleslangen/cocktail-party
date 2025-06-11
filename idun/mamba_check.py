@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 check_mamba.py - Quick check if mamba-ssm is properly installed
@@ -46,16 +47,23 @@ try:
     print("✅ Mamba2 imported successfully")
 
     # Try to create a simple Mamba2 layer
-    layer = Mamba2(d_model=128,d_state=64, d_conv=4, expand=4).to('cuda')    # Block expansion factor
-    print(layer.d_model*layer.expand/layer.headdim)
-
-    print("✅ Mamba2 layer created successfully")
+    layer_triton = Mamba2(d_model=128,d_state=64, d_conv=4, expand=4).to('cuda')    # Block expansion factor
+    layer = Mamba2(d_model=128, d_state=64, d_conv=4, expand=2).to('cuda')
+    print("✅ Mamba2 layers created successfully")
+    print('🐞 Triton bug avoidance:', (layer.d_model*layer.expand/layer.headdim) % 8 == 0)
 
     # Test forward pass
     x = torch.randn(8, 320, 128).cuda()
-    print(x.shape, x.stride())  # Make sure stride[0] and stride[2] are multiples of 8
-    y = layer(x)
-    print("✅ Forward pass successful")
+
+    y = layer_triton(x)
+    print("✅ Forward pass with triton bug avoidance successful")
+
+    try:
+        z = layer(x)
+        print("✅ Regular Forward pass successful")
+    except Exception as e:
+        print(f"❌ Mamba-SSM is only working with triton bug avoidance. d_model*expand/headdim must be divisible by 8. "
+              f" Error: {e}")
 
     print("\n🎉 Mamba-SSM is properly installed and working!")
 
