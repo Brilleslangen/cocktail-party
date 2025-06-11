@@ -11,32 +11,13 @@ module purge
 module load Python/3.11.3-GCCcore-12.3.0  # Required for mamba-ssm
 module load CUDA/12.1.1  # or CUDA/12.6.0 if available - check with 'module avail CUDA'
 module load cuDNN/8.9.2.26-CUDA-12.1.1  # For deep learning
-module load git/2.38.1-GCCcore-12.2.0
 
-# Create project directory structure
-PROJECT_NAME="cocktail-party"
-PROJECT_DIR="$HOME/projects/$PROJECT_NAME"
-mkdir -p "$PROJECT_DIR"
+# Determine repository root (directory one level up from this script)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Use repository root as project directory
+PROJECT_DIR="$REPO_ROOT"
 cd "$PROJECT_DIR"
-
-# Clone repository if not already present
-if [ ! -d ".git" ]; then
-    echo "📦 Cloning repository..."
-    # Try SSH first (recommended if SSH keys are set up)
-    if git clone git@github.com:YOUR_USERNAME/YOUR_REPO.git . 2>/dev/null; then
-        echo "✅ Repository cloned via SSH"
-    else
-        echo "⚠️  SSH clone failed, trying HTTPS..."
-        echo "   Enter your GitHub username:"
-        read -r github_user
-        echo "   Enter your GitHub repo name:"
-        read -r github_repo
-        git clone "https://github.com/${github_user}/${github_repo}.git" .
-    fi
-else
-    echo "📦 Repository already exists, pulling latest changes..."
-    git pull
-fi
 
 # Create virtual environment
 VENV_DIR="$PROJECT_DIR/venv"
