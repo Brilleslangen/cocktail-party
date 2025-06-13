@@ -5,10 +5,12 @@ streaming_mode: ${model_arch.streaming_mode}
 context_size_ms: ${model_arch.stream_chunk_size_ms}
 
 # Model dimensions
-d_model: 128          # Internal model dimension
-n_blocks: 4           # Number of liquid blocks
-d_ff: 512             # Feed-forward dimension
-num_neurons: 40       # Number of neurons in liquid network
+scaler: 1.0           # Scaling factor for model dimensions
+d_model: ${mul:${model_arch.separator.scaler}, 113}          # Internal model dimension
+num_neurons: ${mul:${model_arch.separator.d_model}, 5}
+d_ff: ${mul:${model_arch.separator.d_model}, 4}  # Feed-forward dimension
+n_blocks: 5           # Number of liquid blocks
+
 dropout_val: 0.1      # Dropout rate
 
 causal_proj: true

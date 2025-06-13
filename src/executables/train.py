@@ -111,7 +111,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
 
             # Unscale before clipping
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)  # ConvTasNet style gradient clipping
 
             # Step and update
             scaler.step(optimizer)
@@ -223,6 +223,7 @@ def main(cfg: DictConfig):
     # Setup device and optimizations
     device, use_amp, amp_dtype = setup_device_optimizations()
     torch.manual_seed(cfg.training.params.seed)
+    OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
 
     print(f"👨🏻‍🏫 Workers: {os.cpu_count()}")
 
@@ -246,7 +247,10 @@ def main(cfg: DictConfig):
     pretty_param_count = prettify_param_count(param_count)
     run_name = f"{cfg.name}_{pretty_param_count}"
 
+    print(f"Pretty parameters: {pretty_param_count}")
     print('Pretty MACs:', pretty_macs)
+
+    exit()
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     cfg_dict["model_arch"]["param_count"] = param_count

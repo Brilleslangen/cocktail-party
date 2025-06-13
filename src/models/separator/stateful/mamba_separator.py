@@ -58,9 +58,10 @@ class MambaSeparator(BaseSeparator):
 class MambaBlock(ResidualBlock):
     """Single Mamba-2 block used inside the separator."""
 
-    def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int,
-                 d_ff: int, dropout_val: float, causal: bool):
+    def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int, n_heads: int,
+                 d_ff: int, dropout_val: float, causal: bool, **kwargs):
         self.d_state = d_state
+        self.n_heads = n_heads
         self.d_conv = d_conv
         self.expand = expand
         super().__init__(d_model, d_ff, dropout_val, causal,
@@ -68,12 +69,13 @@ class MambaBlock(ResidualBlock):
 
     def _build_core_layer(self) -> nn.Module:
         class MambaWrapper(nn.Module):
-            def __init__(self, d_model, d_state, d_conv, expand):
+            def __init__(self, d_model, d_state, d_conv, n_heads, expand):
                 super().__init__()
                 self.mamba = Mamba2(
                     d_model=d_model,
                     d_state=d_state,
                     d_conv=d_conv,
+                    headdim=n_heads,
                     expand=expand,
                 )
 

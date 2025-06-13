@@ -6,13 +6,17 @@ context_size_ms: ${model_arch.stream_chunk_size_ms}
 
 input_dim: 64
 output_dim: 2   # e.g., 2xD mask for 2 speakers
-d_model: 128
-n_blocks: 4
+
+# Model dimensions
+scaler: 1.0  # Scaling factor for model dimensions
+expand: 2
+headdim: ${mul:${model_arch.separator.scaler} , 68}  # Dimension of each attention head
+d_model: ${mul:${model_arch.separator.headdim}, ${model_arch.separator.expand}  # Internal model dimension
+n_blocks: 5
 d_ff: 512
 dropout_val: 0.1
 d_state: 16
 d_conv: 4
-expand: 2
 causal_proj: true
 
 frames_per_output: 64

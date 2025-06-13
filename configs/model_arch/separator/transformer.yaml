@@ -7,10 +7,12 @@ sample_rate: ${model_arch.sample_rate}
 stride_ms: ${model_arch.stride_ms}
 
 # Model dimensions
-d_model: 128          # Internal model dimension
-n_blocks: 4           # Number of transformer blocks
-n_heads: 8            # Number of attention heads
-d_ff: 512             # Feed-forward dimension
+scaler: 1.0            # Scaling factor for model dimensions
+n_heads: 4            # Number of attention heads
+headdim: ${mul:${model_arch.separator.scaler} , 68}   # Dimension of each attention head
+d_model: ${mul:${model_arch.separator.n_heads}, ${model_arch.separator.headdim}}  # Internal model dimension
+d_ff: ${mul:${model_arch.separator.d_model}, 4}             # Feed-forward dimension
+n_blocks: 5           # Number of transformer blocks
 dropout_val: 0.1          # Dropout rate
 causal_proj: true
 

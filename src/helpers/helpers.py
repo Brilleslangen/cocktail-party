@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import warnings
+from thop import profile
 
 
 def select_device():
@@ -46,7 +47,6 @@ def count_macs(model: nn.Module, seconds: float = 1.0) -> int:
     cover ``seconds`` seconds. This allows fair comparison with offline mode
     where the full signal is processed in one pass.
     """
-    from thop import profile
 
     device = next(model.parameters()).device
     sample_rate = getattr(model, "sample_rate", 16000)

@@ -19,7 +19,7 @@ def masked_mse(est, ref, mask):
     return (loss * mask).sum() / mask.sum()
 
 
-def masked_snr(est, ref, mask, loss_scale=0.1, eps=1e-8):
+def masked_snr(est, ref, mask, loss_scale=1.0, eps=1e-8):
     """
     est, ref, mask: [B, T]
     Computes negative scaled SNR loss (minimize -SNR)

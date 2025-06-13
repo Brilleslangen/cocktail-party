@@ -7,8 +7,4 @@ defaults:
   - /wandb: default
   - /inference: default
 
-  - override /model_arch/separator: liquid
-
-
-
 name: ${model_arch.separator.name}-${model_arch.name}-offline
