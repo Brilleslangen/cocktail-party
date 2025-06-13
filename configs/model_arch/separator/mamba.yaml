@@ -12,8 +12,9 @@ scaler: 1.0  # Scaling factor for model dimensions
 expand: 2
 headdim: ${mul:${model_arch.separator.scaler} , 68}  # Dimension of each attention head
 d_model: ${mul:${model_arch.separator.headdim}, ${model_arch.separator.expand}  # Internal model dimension
+d_ff: ${mul:${model_arch.separator.d_model}, 4}             # Feed-forward dimension
 n_blocks: 5
-d_ff: 512
+
 dropout_val: 0.1
 d_state: 16
 d_conv: 4
