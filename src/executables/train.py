@@ -230,11 +230,6 @@ def main(cfg: DictConfig):
     # Build model
     model = instantiate(cfg.model_arch).to(device)
 
-    # Optional: Compile model for additional speedup (PyTorch 2.0+)
-    if cfg.training.params.get("compile_model", False) and hasattr(torch, "compile"):
-        print("🔥 Compiling model with torch.compile...")
-        model = torch.compile(model, mode="reduce-overhead")
-
     # Standard optimizer creation (keeping it simple)
     optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
     scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
@@ -250,7 +245,10 @@ def main(cfg: DictConfig):
     print(f"Pretty parameters: {pretty_param_count}")
     print('Pretty MACs:', pretty_macs)
 
-    exit()
+    # Optional: Compile model for additional speedup (PyTorch 2.0+)
+    if cfg.training.params.get("compile_model", False) and hasattr(torch, "compile"):
+        print("🔥 Compiling model with torch.compile...")
+        model = torch.compile(model, mode="reduce-overhead")
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     cfg_dict["model_arch"]["param_count"] = param_count

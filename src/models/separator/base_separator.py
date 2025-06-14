@@ -50,6 +50,8 @@ class BaseSeparator(SubModule):
         self.input_norm = CausalLayerNorm(input_dim, channel_last=True) if causal else nn.LayerNorm(input_dim)
         self.input_proj = nn.Linear(input_dim, d_model)
 
+        print('input dim:', input_dim, 'd_model:', d_model,)
+
         # Stacked separator blocks
         self.blocks = nn.ModuleList([
             self._build_block(block_idx=i) for i in range(n_blocks)
@@ -84,10 +86,11 @@ class BaseSeparator(SubModule):
 
         # Pass through stacked blocks with residual connections
         # Each block handles its own format and residual mechanic internally
-        for i, block in enumerate(self.blocks):
-            if self.stateful:
+        if self.stateful:
+            for i, block in enumerate(self.blocks):
                 x, self.hidden_states[i] = block(x, self.hidden_states[i])
-            else:
+        else:
+            for block in self.blocks:
                 x, _ = block(x)
 
         # Output projection

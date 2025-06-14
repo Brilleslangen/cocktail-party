@@ -4,6 +4,7 @@ params:
   max_epochs:  100
   n_buckets:   10
   seed:        42
+  compile_model: false
 
 optimizer:
   _target_: "torch.optim.AdamW"
