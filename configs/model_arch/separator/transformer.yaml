@@ -7,18 +7,15 @@ sample_rate: ${model_arch.sample_rate}
 stride_ms: ${model_arch.stride_ms}
 
 # Model dimensions
-scaler: 1.0            # Scaling factor for model dimensions
+scaler: 1.0           # Scaling factor for model dimensions
 n_heads: 4            # Number of attention heads
 headdim: ${mul:${model_arch.separator.scaler} , 68}   # Dimension of each attention head
 d_model: ${mul:${model_arch.separator.n_heads}, ${model_arch.separator.headdim}}  # Internal model dimension
 d_ff: ${mul:${model_arch.separator.d_model}, 4}             # Feed-forward dimension
 n_blocks: 5           # Number of transformer blocks
-dropout_val: 0.1          # Dropout rate
+dropout_val: 0.1      # Dropout rate
 causal_proj: true
 
 # Attention configuration - FULL ATTENTION MODE
-local_attention: false   # Disable local attention for full sequence attention
-attention_window_ms: null # Not used when local_attention is false
-
-# This configuration allows the transformer to attend to the entire sequence,
-# suitable for offline processing where we have access to the full audio
+local_attention: true   # Disable local attention for full sequence attention
+attention_window_ms: 34 # Not used when local_attention is false

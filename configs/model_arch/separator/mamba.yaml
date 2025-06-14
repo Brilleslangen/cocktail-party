@@ -19,5 +19,3 @@ dropout_val: 0.1
 d_state: 16
 d_conv: 4
 causal_proj: true
-
-frames_per_output: 64

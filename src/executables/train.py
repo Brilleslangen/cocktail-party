@@ -248,7 +248,8 @@ def main(cfg: DictConfig):
     # Optional: Compile model for additional speedup (PyTorch 2.0+)
     if cfg.training.params.get("compile_model", False) and hasattr(torch, "compile"):
         print("🔥 Compiling model with torch.compile...")
-        model = torch.compile(model, mode="reduce-overhead")
+        model = torch.compile(model, mode="reduce-overhead", fullgraph=False)
+        _ = model(torch.randn(1, 2, cfg.dataset.sample_rate, device=device))  # Warmup compile
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     cfg_dict["model_arch"]["param_count"] = param_count

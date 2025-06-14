@@ -101,6 +101,7 @@ class TransformerBlock(ResidualBlock):
             dropout=self.dropout_val,
             causal=self.causal,
             local_attention=self.local_attention,
+            attention_window=self.attention_window
         )
 
 
@@ -110,7 +111,8 @@ class MultiHeadAttention(nn.Module):
     Uses FlashAttention-2 when available.
     """
 
-    def __init__(self, d_model: int, n_heads: int, dropout: float, causal: bool, local_attention: bool = False):
+    def __init__(self, d_model: int, n_heads: int, dropout: float, causal: bool, local_attention: bool,
+                 attention_window: int):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -118,6 +120,7 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.local_attention = local_attention
         self.causal = causal
+        self.attention_window = attention_window
 
         assert d_model % n_heads == 0, f"d_model ({d_model}) must be divisible by n_heads ({n_heads})"
 
@@ -159,7 +162,7 @@ class MultiHeadAttention(nn.Module):
         attn_out = F.scaled_dot_product_attention(
             q, k, v,
             attn_mask=attn_mask,
-            dropout_p=self.dropout.p if self.training else 0.0,
+            dropout_p=self.dropout.p,
             is_causal=is_causal
         )  # [B, n_heads, T, head_dim]
 
