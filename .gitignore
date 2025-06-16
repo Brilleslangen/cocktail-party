@@ -262,3 +262,4 @@ wandb/
 !src/data
 artifacts/
 multirun/
+data-generation/plots/
