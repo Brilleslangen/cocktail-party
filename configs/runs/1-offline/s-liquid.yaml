@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - /model_arch: tasnet            # Architecture selection
+  - /dataset: static_small         # Dataset selection
+  - /training: default
+  - /wandb: default
+  - /inference: default
+
+  - override /model_arch/separator: liquid
+  - _self_
+
+
+name: ${model_arch.separator.name}-${model_arch.name}-offline
+
+# Adjustments
+model_arch:
+  separator:
+    scaler: 0.45
