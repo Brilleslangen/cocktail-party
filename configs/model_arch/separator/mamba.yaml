@@ -11,13 +11,12 @@ output_dim: 2
 
 # Base scaling constants
 scaler: 1.0               # General scaling factor for width
-base_dim: 60             # Base value for head dim (tunable knob)
+base_dim: 63             # Base value for head dim (tunable knob)
 expand: 2                # Mamba2 internal expansion factor
 
 # Derived dimensions
 headdim: ${mul:${model_arch.separator.scaler}, ${model_arch.separator.base_dim}}                 # 63
-d_model: ${mul:${model_arch.separator.headdim}, ${mul:${model_arch.separator.expand}, 2}}        # 63 * 2 * 2 = 252
-n_heads: ${mul:${model_arch.separator.d_model}, 0.016}                             # 252 / 63 = 4
+d_model: ${mul:${model_arch.separator.headdim}, ${mul:${model_arch.separator.expand}, 2}}        # 63 * 2 * 2 = 252                          # 252 / 63 = 4
 d_ff: ${mul:${model_arch.separator.d_model}, 4}                                                   # 252 * 4 = 1008
 
 # Architecture depth

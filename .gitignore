@@ -263,3 +263,4 @@ wandb/
 artifacts/
 multirun/
 data-generation/plots/
+inference/

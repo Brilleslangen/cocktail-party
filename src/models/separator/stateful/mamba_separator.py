@@ -12,8 +12,8 @@ class MambaSeparator(BaseSeparator):
         output_dim: int,
         d_model: int,
         n_blocks: int,
-        n_heads: int,
         d_state: int,
+        headdim: int,
         d_conv: int,
         expand: int,
         d_ff: int,
@@ -28,8 +28,8 @@ class MambaSeparator(BaseSeparator):
         self.d_state = d_state
         self.d_conv = d_conv
         self.expand = expand
-        self.n_heads = n_heads
         self.dropout_val = dropout_val
+        self.headdim = headdim
 
         super().__init__(
             input_dim=input_dim,
@@ -52,8 +52,8 @@ class MambaSeparator(BaseSeparator):
             d_state=self.d_state,
             d_conv=self.d_conv,
             expand=self.expand,
-            n_heads=self.n_heads,
             d_ff=self.d_ff,
+            headdim=self.headdim,
             dropout_val=self.dropout_val,
             causal=self.causal,
         )
@@ -89,4 +89,4 @@ class MambaBlock(ResidualBlock):
                 out = self.mamba(x)
                 return out, getattr(self.mamba, "final_states", None)
 
-        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.n_heads, self.expand)
+        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand)
