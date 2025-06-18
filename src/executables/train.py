@@ -104,7 +104,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 else:
                     ests = model(mix)
                 loss = loss_fn(ests, refs, lengths)
-                mse_loss = mse_loss_fn()
+                mse_loss = mse_loss_fn(ests, refs, lengths)
 
             # Backward with gradient scaling
             scaler.scale(loss).backward()

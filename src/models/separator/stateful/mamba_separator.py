@@ -7,26 +7,29 @@ class MambaSeparator(BaseSeparator):
     """Mamba-2 based separator following the BaseSeparator design."""
 
     def __init__(
-            self,
-            input_dim: int,
-            output_dim: int,
-            d_model: int,
-            n_blocks: int,
-            d_state: int,
-            d_conv: int,
-            expand: int,
-            d_ff: int,
-            dropout_val: float,
-            frames_per_output: int,
-            streaming_mode: bool,
-            context_size_ms: float,
-            causal_proj: bool,
-            name: str,
-            **kwargs
+        self,
+        input_dim: int,
+        output_dim: int,
+        d_model: int,
+        n_blocks: int,
+        d_state: int,
+        headdim: int,
+        d_conv: int,
+        expand: int,
+        d_ff: int,
+        dropout_val: float,
+        frames_per_output: int,
+        streaming_mode: bool,
+        context_size_ms: float,
+        causal_proj: bool,
+        name: str,
+        **kwargs
     ):
         self.d_state = d_state
         self.d_conv = d_conv
         self.expand = expand
+        self.dropout_val = dropout_val
+        self.headdim = headdim
 
         super().__init__(
             input_dim=input_dim,
@@ -50,7 +53,8 @@ class MambaSeparator(BaseSeparator):
             d_conv=self.d_conv,
             expand=self.expand,
             d_ff=self.d_ff,
-            dropout_val=self.dropout,
+            headdim=self.headdim,
+            dropout_val=self.dropout_val,
             causal=self.causal,
         )
 
@@ -85,4 +89,4 @@ class MambaBlock(ResidualBlock):
                 out = self.mamba(x)
                 return out, getattr(self.mamba, "final_states", None)
 
-        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.expand)
+        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand)
