@@ -48,31 +48,7 @@ def count_macs(model: nn.Module, seconds: float = 1.0) -> int:
     where the full signal is processed in one pass.
     """
 
-    device = next(model.parameters()).device
-    sample_rate = getattr(model, "sample_rate", 16000)
-    frames = int(sample_rate * seconds)
-
-    streaming = getattr(model, "streaming_mode", False)
-    if streaming:
-        window = getattr(model, "input_size", frames)
-        chunk = getattr(model, "output_size", frames)
-        dummy = torch.randn(1, 2, window, device=device)
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="This API is being deprecated", module="thop"
-            )
-            macs_per_window, _ = profile(model, inputs=(dummy,), verbose=False)
-        windows_per_second = sample_rate / chunk
-        macs = macs_per_window * windows_per_second
-    else:
-        dummy = torch.randn(1, 2, frames, device=device)
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="This API is being deprecated", module="thop"
-            )
-            macs, _ = profile(model, inputs=(dummy,), verbose=False)
-
-    return int(macs)
+    pass
 
 
 def prettify_macs(macs: float) -> str:
