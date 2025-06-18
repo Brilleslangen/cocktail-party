@@ -1,21 +1,30 @@
 _target_: "src.models.separator.MambaSeparator"
 name: "mamba"
 
+# Streaming config (dynamic chunked inference)
 streaming_mode: ${model_arch.streaming_mode}
 context_size_ms: ${model_arch.stream_chunk_size_ms}
 
+# Input/output sizes (e.g. 64-dim features, 2 speakers)
 input_dim: 64
-output_dim: 2   # e.g., 2xD mask for 2 speakers
+output_dim: 2
 
-# Model dimensions
-scaler: 1.0  # Scaling factor for model dimensions
-expand: 2
-headdim: ${mul:${model_arch.separator.scaler} , 68}  # Dimension of each attention head
-d_model: ${mul:${model_arch.separator.headdim}, ${mul:${model_arch.separator.expand}, 2}  # Internal model dimension
-d_ff: ${mul:${model_arch.separator.d_model}, 4}             # Feed-forward dimension
-n_blocks: 5
+# Base scaling constants
+scaler: 1.0               # General scaling factor for width
+base_dim: 60             # Base value for head dim (tunable knob)
+expand: 2                # Mamba2 internal expansion factor
 
-dropout_val: 0.1
-d_state: 16
-d_conv: 4
-causal_proj: true
+# Derived dimensions
+headdim: ${mul:${model_arch.separator.scaler}, ${model_arch.separator.base_dim}}                 # 63
+d_model: ${mul:${model_arch.separator.headdim}, ${mul:${model_arch.separator.expand}, 2}}        # 63 * 2 * 2 = 252
+n_heads: ${mul:${model_arch.separator.d_model}, 0.016}                             # 252 / 63 = 4
+d_ff: ${mul:${model_arch.separator.d_model}, 4}                                                   # 252 * 4 = 1008
+
+# Architecture depth
+n_blocks: 5                  # Number of stacked Mamba blocks
+
+# Mamba-specific params
+dropout_val: 0.1            # Dropout rate
+d_state: 16                 # Mamba SSM state dim
+d_conv: 4                   # Convolutional kernel size
+causal_proj: true           # Use causal projection in residual core
