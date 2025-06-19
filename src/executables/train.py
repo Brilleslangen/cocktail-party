@@ -244,17 +244,11 @@ def main(cfg: DictConfig):
     # Build model
     model = instantiate(cfg.model_arch).to(device)
 
-    training = True
-
-    if hasattr(model, "identity") and model.identity:
-        training = False
-        print("Using Identity model, no training will be performed.")
-
     # Standard optimizer creation (keeping it simple)
 
-    optimizer = instantiate(cfg.training.optimizer, params=model.parameters()) if training else None
-    scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False) if training else None
-    loss = instantiate(cfg.training.loss).to(device) if training else None
+    optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
+    scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
+    loss = instantiate(cfg.training.loss).to(device)
 
     # Calculate composite figures and init wandb
     param_count = count_parameters(model)
@@ -276,7 +270,7 @@ def main(cfg: DictConfig):
     cfg_dict["model_arch"]["param_count"] = param_count
     cfg_dict["model_arch"]["macs"] = macs
     cfg_dict["model_arch"]["pretty_macs"] = pretty_macs
-    cfg_dict["device"] = str(device)
+    cfg_dict["device"] = str(device.type)
     cfg_dict["mixed_precision"] = use_amp
     cfg_dict["amp_dtype"] = str(amp_dtype) if use_amp else None
 
@@ -314,12 +308,11 @@ def main(cfg: DictConfig):
 
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         start_time = time.time()
-        train_loss = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype) if training else 0.0
+        train_loss = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype)
         val_stats = validate_epoch(model, val_loader, loss, device, use_amp, amp_dtype)
         time_elapsed = format_time(time.time() - start_time)
 
-        if training:
-            scheduler.step()
+        scheduler.step()
         epochs_trained = epoch
         print(
             f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
