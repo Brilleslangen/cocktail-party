@@ -35,13 +35,13 @@ def ms_to_samples(ms, sample_rate=16000) -> int:
 def prettify_macs(macs: float) -> str:
     """Convert MAC count per second to a human-readable string."""
     if macs < 1e6:
-        return f"{macs / 1e3:.2f}K MAC/s"
+        return f"{macs / 1e3:.2f}K"
     elif macs < 1e9:
-        return f"{macs / 1e6:.2f}M MAC/s"
+        return f"{macs / 1e6:.2f}M"
     elif macs < 1e12:
-        return f"{macs / 1e9:.2f}G MAC/s"
+        return f"{macs / 1e9:.2f}G"
     else:
-        return f"{macs / 1e12:.2f}T MAC/s"
+        return f"{macs / 1e12:.2f}T"
 
 
 def prettify_param_count(param_count: int) -> str:

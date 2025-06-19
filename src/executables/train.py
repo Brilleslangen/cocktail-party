@@ -12,8 +12,8 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from src.data.collate import setup_train_dataloaders
-from src.evaluate import Loss, compute_mask, batch_si_snr, batch_snr
-from src.evaluate.eval_metrics import count_parameters, count_macs
+from src.evaluate import Loss, compute_mask, compute_validation_metrics, count_parameters, count_macs
+from src.evaluate.loss import MaskedMSELoss
 from src.helpers import (
     select_device,
     prettify_macs,
@@ -21,7 +21,6 @@ from src.helpers import (
     format_time,
 )
 from src.data.streaming import Streamer
-from src.evaluate.loss import MaskedMSELoss
 
 
 def setup_device_optimizations():
@@ -78,7 +77,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 use_amp: bool, amp_dtype: torch.dtype):
     """
     Runs one full training epoch over `loader`.
-    Returns the average loss.
+    Returns the average loss and MSE loss.
     """
     model.train()
     total_loss = 0.0
@@ -142,36 +141,42 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
         total_loss += loss_val
         total_mse_loss += mse_loss_val
 
-        pbar.set_postfix(avg_loss=f"{total_loss / (i + 1):.4f}", curr_loss=f"{loss_val:.4f}",
-                         avg_mse=f"{total_mse_loss / (i + 1):.4f}", curr_mse=f"{mse_loss_val:.4f}")
+        pbar.set_postfix(loss=f"{loss_val:.4f}", mse=f"{mse_loss_val:.4f}")
 
         if model.separator.stateful:
             model.reset_state()
 
-    return total_loss / len(loader)
+    return total_loss / len(loader), total_mse_loss / len(loader)
 
 
 def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
                    device: torch.device, use_amp: bool, amp_dtype: torch.dtype):
-    """Validation with mixed precision support."""
+    """Validation with energy-weighted metrics."""
     model.eval()
     streaming_mode = getattr(model, "streaming_mode", False)
     streamer = Streamer(model) if streaming_mode else None
-    totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i"]}
-    total_examples = 0
 
-    use_targets_as_input = getattr(model, "use_targets_as_input", False)
+    # Initialize metric accumulators
+    totals = {
+        "loss": 0.0,
+        "ew_mse": 0.0,
+        "ew_sdr": 0.0,
+        "ew_si_sdr": 0.0,
+        "ew_si_sdr_i": 0.0
+    }
+    total_examples = 0
 
     with torch.no_grad():
         for mix, refs, lengths in tqdm(loader, desc="Validate", leave=False):
             mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
-            model_input = refs if use_targets_as_input else mix
+            model_input = refs if model.use_targets_as_input else mix
 
-            if use_targets_as_input:
+            if model.use_targets_as_input:
                 # Assert that targets and references are the same
                 assert torch.allclose(model_input, refs,
                                       atol=1e-6), "Mix and references must be the same when using targets as input."
 
+            # Reset state for stateful models
             if hasattr(model, "reset_state"):
                 model.reset_state()
             elif hasattr(model, "separator") and hasattr(model.separator, "reset_state"):
@@ -199,33 +204,17 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
             # Compute mask for valid frames
             mask = compute_mask(lengths, ests.size(-1), ests.device)
 
-            # For each channel
-            snr_out_L = batch_snr(ests[:, 0, :], refs[:, 0, :], mask)
-            snr_out_R = batch_snr(ests[:, 1, :], refs[:, 1, :], mask)
-            snr_mix_L = batch_snr(mix[:, 0, :], refs[:, 0, :], mask)
-            snr_mix_R = batch_snr(mix[:, 1, :], refs[:, 1, :], mask)
+            # Compute energy-weighted metrics
+            metrics = compute_validation_metrics(ests, mix, refs, mask)
 
-            snr_est = (snr_out_L + snr_out_R) / 2
-            snr_mix = (snr_mix_L + snr_mix_R) / 2
-            snr_i = snr_est - snr_mix
-
-            si_snr_out_L = batch_si_snr(ests[:, 0, :], refs[:, 0, :], mask)
-            si_snr_out_R = batch_si_snr(ests[:, 1, :], refs[:, 1, :], mask)
-            si_snr_mix_L = batch_si_snr(mix[:, 0, :], refs[:, 0, :], mask)
-            si_snr_mix_R = batch_si_snr(mix[:, 1, :], refs[:, 1, :], mask)
-
-            si_snr_est = (si_snr_out_L + si_snr_out_R) / 2
-            si_snr_mix = (si_snr_mix_L + si_snr_mix_R) / 2
-            si_snr_i = si_snr_est - si_snr_mix
-
-            # Sum (not mean) to enable averaging at end
+            # Accumulate metrics
             totals["loss"] += loss.item() * B
-            totals["snr"] += snr_est.sum().item()
-            totals["snr_i"] += snr_i.sum().item()
-            totals["si_snr"] += si_snr_est.sum().item()
-            totals["si_snr_i"] += si_snr_i.sum().item()
+            for metric_name, metric_values in metrics.items():
+                totals[metric_name] += metric_values.sum().item()
+
             total_examples += B
 
+    # Average over all examples
     for k in totals:
         totals[k] /= total_examples
 
@@ -245,7 +234,6 @@ def main(cfg: DictConfig):
     model = instantiate(cfg.model_arch).to(device)
 
     # Standard optimizer creation (keeping it simple)
-
     optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
     scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
     loss = instantiate(cfg.training.loss).to(device)
@@ -257,8 +245,9 @@ def main(cfg: DictConfig):
     pretty_param_count = prettify_param_count(param_count)
     run_name = f"{cfg.name}_{pretty_param_count}"
 
-    print(f"Pretty parameters: {pretty_param_count}")
-    print('Pretty MACs:', pretty_macs)
+    print(f"📊 Model Statistics:")
+    print(f"   Parameters: {pretty_param_count}")
+    print(f"   MACs/s: {pretty_macs}")
 
     # Optional: Compile model for additional speedup (PyTorch 2.0+)
     if cfg.training.params.get("compile_model", False) and hasattr(torch, "compile"):
@@ -267,8 +256,7 @@ def main(cfg: DictConfig):
         _ = model(torch.randn(1, 2, cfg.dataset.sample_rate, device=device))  # Warmup compile
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    cfg_dict["model_arch"]["param_count"] = param_count
-    cfg_dict["model_arch"]["macs"] = macs
+    cfg_dict["model_arch"]["param_count"] = pretty_param_count
     cfg_dict["model_arch"]["pretty_macs"] = pretty_macs
     cfg_dict["device"] = str(device.type)
     cfg_dict["mixed_precision"] = use_amp
@@ -295,7 +283,8 @@ def main(cfg: DictConfig):
     # dataloaders
     train_loader, val_loader = setup_train_dataloaders(cfg)
 
-    best_metric_name = "si_snr_i"
+    # Training configuration
+    best_metric_name = "ew_si_sdr_i"
     best_metric_value = -float("inf")
     best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
 
@@ -306,17 +295,26 @@ def main(cfg: DictConfig):
     epochs_no_improve = 0
     epochs_trained = 0
 
+    print(f"\n🎯 Training for {cfg.training.params.max_epochs} epochs, optimizing {best_metric_name}")
+    print(f"   Early stopping: patience={patience}, min_delta={min_delta}")
+
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         start_time = time.time()
-        train_loss = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype)
+        train_loss, train_mse = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype)
         val_stats = validate_epoch(model, val_loader, loss, device, use_amp, amp_dtype)
         time_elapsed = format_time(time.time() - start_time)
 
         scheduler.step()
         epochs_trained = epoch
-        print(
-            f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +
-            f"SI-SNR={val_stats['si_snr']:.2f} SI-SNRi={val_stats['si_snr_i']:.2f} SNR={val_stats['snr']:.2f} ")
+
+        # Print epoch summary
+        print(f"\rEpoch {epoch:3d}/{cfg.training.params.max_epochs} | "
+              f"Time: {time_elapsed} | "
+              f"Train Loss: {train_loss:.4f} | "
+              f"Train MSE: {train_mse:.4f} | "
+              f"Val Loss: {val_stats['loss']:.4f} | "
+              f"EW-SI-SDRi: {val_stats['ew_si_sdr_i']:.2f} dB | "
+              f"EW-SI-SDR: {val_stats['ew_si_sdr']:.2f} dB")
 
         # Early stopping check
         if val_stats["loss"] < best_val_loss - min_delta:
@@ -326,21 +324,24 @@ def main(cfg: DictConfig):
             epochs_no_improve += 1
 
         if epochs_no_improve >= patience:
-            print(f"Early stopping triggered at epoch {epoch}.")
+            print(f"\n⏹️  Early stopping triggered at epoch {epoch}.")
             break
 
+        # Log to wandb
         if cfg.wandb.enabled:
             wandb.log({
                 "train/loss": train_loss,
+                "train/mse": train_mse,
                 "val/loss": val_stats["loss"],
-                "val/SNR": val_stats["snr"],
-                "val/SNRi": val_stats["snr_i"],
-                "val/SI-SNR": val_stats["si_snr"],
-                "val/SI-SNRi": val_stats["si_snr_i"],
+                "val/ew_mse": val_stats["ew_mse"],
+                "val/ew_sdr": val_stats["ew_sdr"],
+                "val/ew_si_sdr": val_stats["ew_si_sdr"],
+                "val/ew_si_sdr_i": val_stats["ew_si_sdr_i"],
                 "learning_rate": optimizer.param_groups[0]["lr"],
-            }, step=epoch)
+                "epoch": epoch
+            })
 
-        # checkpoint best
+        # Save checkpoint if best
         current = val_stats[best_metric_name]
         if current > best_metric_value:
             best_metric_value = current
@@ -353,8 +354,9 @@ def main(cfg: DictConfig):
                 "sched_state": scheduler.state_dict(),
                 "val_stats": val_stats,
             }, best_ckpt_path)
+            print(f"   💾 Saved new best model (EW-SI-SDRi: {current:.2f} dB)")
 
-    # upload the best‐metric model to W&B
+    # Upload the best model to W&B
     if cfg.wandb.enabled and best_ckpt_path is not None:
         wandb.run.summary[f"best/{best_metric_name}"] = best_metric_value
         wandb.run.summary["epochs_trained"] = epochs_trained
@@ -362,7 +364,9 @@ def main(cfg: DictConfig):
         art.add_file(best_ckpt_path)
         wandb.log_artifact(art)
 
-    print(f"Training complete. Best {best_metric_name}: {best_metric_value:.4f}")
+    print(f"\n✅ Training complete!")
+    print(f"   Best {best_metric_name}: {best_metric_value:.4f} dB")
+    print(f"   Total epochs: {epochs_trained}")
 
 
 if __name__ == "__main__":

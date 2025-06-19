@@ -20,7 +20,7 @@ import scipy.io
 from scipy.signal import fftconvolve
 
 import torch
-from src.evaluate.metrics import batch_snr, batch_si_snr
+from src.evaluate.train_metrics import batch_snr, batch_si_snr
 
 # ------------------------------- Hyper-params ------------------------------ #
 SAMPLE_RATE        = 16_000
