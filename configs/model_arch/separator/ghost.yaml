@@ -1,7 +1,7 @@
-_target_: "src.models.separator.NoSeparator"
+_target_: "src.models.separator.GhostSeparator"
 name: "no_separator"
 
 streaming_mode: ${model_arch.streaming_mode} # whether to use streaming or non-streaming mode
-context_size_ms: 34.0 #${model_arch.stream_chunk_size_ms}
+context_size_ms: ${model_arch.stream_chunk_size_ms}
 
 

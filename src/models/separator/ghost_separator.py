@@ -5,7 +5,7 @@ from src.models.separator.base_separator import BaseSeparator, build_FFN, Residu
 from src.helpers import ms_to_samples
 
 
-class NoSeparator:
+class GhostSeparator:
     def __init__(
             self,
             input_dim: int,

@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-class IdentityModel(nn.Module):
+class Oracle(nn.Module):
     """Baseline model that simply returns its input."""
 
     def __init__(self, sample_rate: int, use_targets_as_input: bool, **kwargs):

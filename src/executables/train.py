@@ -13,10 +13,9 @@ from torch.utils.data import DataLoader
 
 from src.data.collate import setup_train_dataloaders
 from src.evaluate import Loss, compute_mask, batch_si_snr, batch_snr
+from src.evaluate.eval_metrics import count_parameters, count_macs
 from src.helpers import (
     select_device,
-    count_parameters,
-    count_macs,
     prettify_macs,
     prettify_param_count,
     format_time,

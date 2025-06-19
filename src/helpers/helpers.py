@@ -1,7 +1,4 @@
 import torch
-from torch import nn
-import warnings
-from thop import profile
 
 
 def select_device():
@@ -35,24 +32,8 @@ def ms_to_samples(ms, sample_rate=16000) -> int:
     return int(ms * sample_rate / 1000)
 
 
-def count_parameters(model: nn.Module) -> int:
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-def count_macs(model: nn.Module, seconds: float = 1.0) -> int:
-    """Return MACs needed to process ``seconds`` of audio.
-
-    For streaming models we profile a single context window of length
-    ``model.input_size`` and multiply by the number of windows required to
-    cover ``seconds`` seconds. This allows fair comparison with offline mode
-    where the full signal is processed in one pass.
-    """
-
-    return 0
-
-
 def prettify_macs(macs: float) -> str:
-    """Convert MAC count per second to a human readable string."""
+    """Convert MAC count per second to a human-readable string."""
     if macs < 1e6:
         return f"{macs / 1e3:.2f}K MAC/s"
     elif macs < 1e9:

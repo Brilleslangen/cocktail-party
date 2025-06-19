@@ -1,4 +1,4 @@
-_target_: "src.models.identity.IdentityModel"
+_target_: "src.models.oracle.Oracle"
 
 _recursive_: false
 sample_rate: 16000

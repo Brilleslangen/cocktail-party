@@ -7,7 +7,7 @@ defaults:
   - /inference: default
   - _self_
 
-  - override /model_arch/separator: phantom
+  - override /model_arch/separator: ghost
 
 name: ${model_arch.name}-offline
 

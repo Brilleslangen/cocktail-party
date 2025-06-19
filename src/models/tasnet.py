@@ -28,6 +28,7 @@ class TasNet(nn.Module):
 
         self.no_separator = no_separator  # Encoder decoder identity evaluation
         self.use_targets_as_input = use_targets_as_input  # Use target as input for training
+        self.sample_rate = sample_rate  # Sample rate in Hz
 
         # -------------------------------------------------------------------
         # Instantiate encoder and decoder from their Hydra configs

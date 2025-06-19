@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - /model_arch: tasnet            # Architecture selection
+  - /dataset: static_small         # Dataset selection
+  - /training: default
+  - /wandb: default
+  - /inference: default
+  - _self_
+
+  - override /model_arch/separator: transformer
+
+name: ${model_arch.separator.name}-${model_arch.name}-offline
+
+model_arch:
+  streaming_mode: true
