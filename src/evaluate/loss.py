@@ -19,15 +19,19 @@ def masked_mse(est, ref, mask):
     return (loss * mask).sum() / mask.sum()
 
 
-def masked_snr(est, ref, mask, loss_scale=1.0, eps=1e-8):
+def masked_sdr(est, ref, mask, loss_scale=1.0, eps=1e-8):
     """
     est, ref, mask: [B, T]
-    Computes negative scaled SNR loss (minimize -SNR)
+    Computes negative scaled SDR loss (minimize -SDR)
     """
-    num = ((ref * mask) ** 2).sum(dim=1)
-    den = (((est - ref) * mask) ** 2).sum(dim=1)
-    snr = 10 * torch.log10((num + eps) / (den + eps))  # [B]
-    return loss_scale * -snr  # Return per-sample loss
+    # Compute the numerator as signal power
+    signal_power = ((ref * mask) ** 2).sum(dim=1)
+
+    # Compute the denominator as distortion power (includes interference and noise)
+    distortion_power = (((est - ref) * mask) ** 2).sum(dim=1)
+
+    sdr = 10 * torch.log10((signal_power + eps) / (distortion_power + eps))  # [B]
+    return loss_scale * -sdr  # Negative because we minimize
 
 
 class Loss(nn.Module):
@@ -48,7 +52,13 @@ class MaskedMSELoss(Loss):
         return (lossL + lossR) / 2
 
 
-class MaskedSNRLoss(nn.Module):
+class EnergyWeightedMaskedSDRLoss(nn.Module):
+    """
+    Scale-dependent SDR loss with time-masking and per-ear energy weighting.
+    Intended for binaural (2-channel) target-speaker separation with variable
+    sequence lengths. Minimises −SDR for each channel, then combines the
+    channel losses using reference‐signal power as weights.
+    """
     def __init__(self, loss_scale=1.0):
         super().__init__()
         self.loss_scale = loss_scale
@@ -63,9 +73,9 @@ class MaskedSNRLoss(nn.Module):
         assert C == 2, "Expected stereo input with shape [B, 2, T]"
         mask = compute_mask(lengths, T, est.device)  # [B, T]
 
-        # Compute per-channel SNR loss [B]
-        lossL = masked_snr(est[:, 0, :], ref[:, 0, :], mask, self.loss_scale)
-        lossR = masked_snr(est[:, 1, :], ref[:, 1, :], mask, self.loss_scale)
+        # Compute per-channel SDR loss [B]
+        lossL = masked_sdr(est[:, 0, :], ref[:, 0, :], mask, self.loss_scale)
+        lossR = masked_sdr(est[:, 1, :], ref[:, 1, :], mask, self.loss_scale)
 
         # Energy-based weighting
         energyL = ((ref[:, 0, :] * mask) ** 2).sum(dim=1)
@@ -77,3 +87,4 @@ class MaskedSNRLoss(nn.Module):
         # Weighted loss per sample
         loss = weightL * lossL + weightR * lossR  # [B]
         return loss.mean()
+
