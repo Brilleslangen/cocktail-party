@@ -9,6 +9,8 @@ window_length_ms: 32.0      # STFT window length (512 samples @16 kHz)
 stride_ms: 2.0              # STFT hop length (32 samples @16 kHz)
 sample_rate: 16000          # sample rate
 use_spatial_features: true  # toggle spatial feature computation
+no_separator: false         # disable separator (e.g. for identity model)
+use_targets_as_input: false  # use targets as input to the separator (e.g. for identity model)
 
 streaming_mode: false        # Process entire audio stream (offline) or process in chunks (online)
 stream_chunk_size_ms: 4.0   # chunk size in ms (must be a multiple of stride_ms)

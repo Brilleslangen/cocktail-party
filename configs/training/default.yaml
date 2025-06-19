@@ -1,5 +1,5 @@
 params:
-  batch_size:   1
+  batch_size:   32
   num_workers:  12
   max_epochs:  100
   n_buckets:   10

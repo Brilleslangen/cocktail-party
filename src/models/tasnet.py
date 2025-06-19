@@ -23,8 +23,11 @@ class TasNet(nn.Module):
 
     def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, sample_rate: int,
                  window_length_ms: float, stride_ms: float, streaming_mode: bool, stream_chunk_size_ms: float,
-                 filter_length_ms, use_spatial_features: bool, **kwargs: Any):
+                 filter_length_ms, use_targets_as_input: bool, use_spatial_features: bool, no_separator: bool, **kwargs: Any):
         super().__init__()
+
+        self.no_separator = no_separator  # Encoder decoder identity evaluation
+        self.use_targets_as_input = use_targets_as_input  # Use target as input for training
 
         # -------------------------------------------------------------------
         # Instantiate encoder and decoder from their Hydra configs
@@ -187,16 +190,20 @@ class TasNet(nn.Module):
         else:
             fused = torch.cat([enc_left, enc_right], dim=1)
 
-        # Estimate masks
-        masks = self.separator(fused)  # [B, 2D, T_frames]
-        mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
-
-        if self.streaming_mode:
+        if self.streaming_mode:  # Only use last frames for output
             enc_left, enc_right = enc_left[..., -self.frames_per_output:], enc_right[..., -self.frames_per_output:]
 
-        # Apply masks and decode
-        outL = self.decoder(mL * enc_left)  # [B, 1, T_padded]
-        outR = self.decoder(mR * enc_right)  # [B, 1, T_padded]
+        if self.no_separator:
+            # Identity evaluation - skip separator
+            outL = self.decoder(enc_left)
+            outR = self.decoder(enc_right)
+        else:  # Estimate masks
+            masks = self.separator(fused)  # [B, 2D, T_frames]
+            mL, mR = masks.chunk(2, dim=1)  # each [B, D, T_frames]
+
+            # Apply masks and decode
+            outL = self.decoder(mL * enc_left)  # [B, 1, T_padded]
+            outR = self.decoder(mR * enc_right)  # [B, 1, T_padded]
 
         # Remove padding to recover original length
         if not self.streaming_mode:
@@ -208,11 +215,6 @@ class TasNet(nn.Module):
         out = torch.stack([outL.squeeze(1), outR.squeeze(1)], dim=1)
 
         return out
-
-
-def crop_to_min_time(*tensors):
-    min_T = min(t.shape[-1] for t in tensors)
-    return [t[..., -min_T:] for t in tensors]
 
 
 def calculate_frames_per_output(chunk_size_ms: float, stride_ms: float, kernel_size_ms: float, sample_rate: int,

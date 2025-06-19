@@ -90,19 +90,26 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
 
     # Setup mixed precision
     scaler = torch.cuda.amp.GradScaler() if (use_amp and device.type == "cuda") else None
+    use_targets_as_input = getattr(model, "use_targets_as_input", False)
 
     pbar = tqdm(loader, total=len(loader), desc="Train", leave=False)
 
     for i, (mix, refs, lengths) in enumerate(pbar):
         mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
+        model_input = refs if use_targets_as_input else mix
+
+        if use_targets_as_input:
+            # Assert that targets and references are the same
+            assert torch.allclose(model_input, refs, atol=1e-6), ("Mix and references must be the same when using "
+                                                                  " targets as input.")
 
         # Forward pass with mixed precision
         if use_amp and device.type == "cuda":
             with torch.cuda.amp.autocast(dtype=amp_dtype):
                 if streaming_mode:
-                    ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+                    ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
                 else:
-                    ests = model(mix)
+                    ests = model(model_input)
                 loss = loss_fn(ests, refs, lengths)
                 mse_loss = mse_loss_fn(ests, refs, lengths)
 
@@ -120,9 +127,9 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
         else:
             # Standard training (CPU/MPS)
             if streaming_mode:
-                ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+                ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
             else:
-                ests = model(mix)
+                ests = model(model_input)
 
             loss = loss_fn(ests, refs, lengths)
             mse_loss = mse_loss_fn(ests, refs, lengths)
@@ -154,9 +161,17 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
     totals = {k: 0.0 for k in ["loss", "snr", "snr_i", "si_snr", "si_snr_i"]}
     total_examples = 0
 
+    use_targets_as_input = getattr(model, "use_targets_as_input", False)
+
     with torch.no_grad():
         for mix, refs, lengths in tqdm(loader, desc="Validate", leave=False):
             mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
+            model_input = refs if use_targets_as_input else mix
+
+            if use_targets_as_input:
+                # Assert that targets and references are the same
+                assert torch.allclose(model_input, refs,
+                                      atol=1e-6), "Mix and references must be the same when using targets as input."
 
             if hasattr(model, "reset_state"):
                 model.reset_state()
@@ -167,17 +182,17 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
             if use_amp and device.type == "cuda":
                 with torch.cuda.amp.autocast(dtype=amp_dtype):
                     if streaming_mode:
-                        ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+                        ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
                         mix = mix[..., streamer.pad_warmup:]
                     else:
-                        ests = model(mix)
+                        ests = model(model_input)
                     loss = criterion(ests, refs, lengths)
             else:
                 if streaming_mode:
-                    ests, refs, lengths = streamer.stream_batch(mix, refs, lengths, trim_warmup=True)
+                    ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
                     mix = mix[..., streamer.pad_warmup:]
                 else:
-                    ests = model(mix)
+                    ests = model(model_input)
                 loss = criterion(ests, refs, lengths)
 
             B = ests.size(0)
@@ -230,10 +245,17 @@ def main(cfg: DictConfig):
     # Build model
     model = instantiate(cfg.model_arch).to(device)
 
+    training = True
+
+    if hasattr(model, "identity") and model.identity:
+        training = False
+        print("Using Identity model, no training will be performed.")
+
     # Standard optimizer creation (keeping it simple)
-    optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
-    scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
-    loss = instantiate(cfg.training.loss).to(device)
+
+    optimizer = instantiate(cfg.training.optimizer, params=model.parameters()) if training else None
+    scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False) if training else None
+    loss = instantiate(cfg.training.loss).to(device) if training else None
 
     # Calculate composite figures and init wandb
     param_count = count_parameters(model)
@@ -293,11 +315,12 @@ def main(cfg: DictConfig):
 
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         start_time = time.time()
-        train_loss = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype)
+        train_loss = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype) if training else 0.0
         val_stats = validate_epoch(model, val_loader, loss, device, use_amp, amp_dtype)
         time_elapsed = format_time(time.time() - start_time)
 
-        scheduler.step()
+        if training:
+            scheduler.step()
         epochs_trained = epoch
         print(
             f"\rEpoch {epoch:2d} time={time_elapsed} train_loss={train_loss:.4f} val_loss={val_stats['loss']:.4f} " +

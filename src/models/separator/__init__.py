@@ -1,6 +1,7 @@
 from src.models.separator.stateful.liquid_separator import LiquidSeparator
 from src.models.separator.stateless.transformer_separator import TransformerSeparator
 from src.models.separator.stateless.tcn_separator import TCNSeparator
+from src.models.separator.stateless.no_separator import NoSeparator
 
 try:
     from src.models.separator.stateful.mamba_separator import MambaSeparator
@@ -16,4 +17,4 @@ except ImportError:
 
     pass
 
-__all__ = ["TCNSeparator", "MambaSeparator", "LiquidSeparator", "TransformerSeparator"]
+__all__ = ["TCNSeparator", "MambaSeparator", "LiquidSeparator", "TransformerSeparator", "NoSeparator"]

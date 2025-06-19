@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - /model_arch: tasnet          # Architecture selection
+  - /dataset: static_big         # Dataset selection
+  - /training: default
+  - /wandb: default
+  - /inference: default
+  - _self_
+
+  - override /model_arch/separator: phantom
+
+name: ${model_arch.name}-offline
+
+# Adjustments
+model_arch:
+  no_separator: true
+  use_spatial_features: false
+  use_targets_as_input: true

@@ -1,0 +1,7 @@
+_target_: "src.models.identity.IdentityModel"
+
+_recursive_: false
+sample_rate: 16000
+use_targets_as_input: true
+
+name: identity

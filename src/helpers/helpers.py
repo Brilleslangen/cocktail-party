@@ -48,7 +48,7 @@ def count_macs(model: nn.Module, seconds: float = 1.0) -> int:
     where the full signal is processed in one pass.
     """
 
-    pass
+    return 0
 
 
 def prettify_macs(macs: float) -> str:
