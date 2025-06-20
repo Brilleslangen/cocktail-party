@@ -12,6 +12,7 @@ class GhostSeparator:
             output_dim: int,
             streaming_mode: bool,
             context_size_ms: float,
+            name,
             **kwargs
     ):
         self.input_dim = input_dim
@@ -19,3 +20,4 @@ class GhostSeparator:
         self.streaming_mode = streaming_mode
         self.context_size_ms = context_size_ms
         self.stateful = True
+        self.name = name

@@ -4,12 +4,11 @@ defaults:
   - /dataset: static_big         # Dataset selection
   - /training: default
   - /wandb: default
-  - /inference: default
   - _self_
 
   - override /model_arch/separator: ghost
 
-name: ${model_arch.name}-mix-offline
+name: ${name}-mix-offline
 group: 0-baselines
 
 # Adjustments

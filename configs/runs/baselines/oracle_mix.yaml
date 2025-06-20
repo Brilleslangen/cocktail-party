@@ -1,10 +1,9 @@
 # @package _global_
 defaults:
-  - /model_arch: identity          # Architecture selection
-  - /dataset: static_small         # Dataset selection
+  - /model_arch: oracle          # Architecture selection
+  - /dataset: static_big         # Dataset selection
   - /training: default
   - /wandb: default
-  - /inference: default
   - _self_
 
 name: ${model_arch.name}-mix-offline

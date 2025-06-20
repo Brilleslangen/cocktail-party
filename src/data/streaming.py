@@ -19,7 +19,7 @@ class Streamer:
             raise ValueError("Model must define context size and chunk size")
         self.buffer: Optional[Tensor] = None
         self.pad_warmup = self.buffer_size - self.chunk_size
-        self.device = next(model.parameters()).device
+        self.device = model.device
 
     def reset(self, batch_size: int, channels: int):
         """Zero the ring‐buffer and reset any model state."""

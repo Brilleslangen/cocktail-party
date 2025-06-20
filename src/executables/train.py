@@ -1,6 +1,6 @@
 import os
 import time
-import platform
+
 
 import torch
 import hydra
@@ -11,65 +11,15 @@ from hydra.utils import instantiate
 from torch import nn
 from torch.utils.data import DataLoader
 
-from src.data.collate import setup_train_dataloaders
+from src.data.collate import setup_test_dataloaders
 from src.evaluate import Loss, compute_mask, compute_validation_metrics, count_parameters, count_macs
 from src.evaluate.loss import MaskedMSELoss
 from src.helpers import (
-    select_device,
     prettify_macs,
     prettify_param_count,
-    format_time,
+    format_time, setup_device_optimizations,
 )
 from src.data.streaming import Streamer
-
-
-def setup_device_optimizations():
-    """Configure device-specific optimizations."""
-    device = select_device()
-    device_type = device.type
-
-    # Device-specific settings
-    if device_type == "cuda":
-        # Enable TF32 on Ampere GPUs for better performance
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-
-        # Enable cudnn benchmarking for consistent input sizes
-        torch.backends.cudnn.benchmark = True
-
-        # Get GPU info for logging
-        gpu_name = torch.cuda.get_device_name()
-        gpu_capability = torch.cuda.get_device_capability()
-
-        print(f"🚀 CUDA device: {gpu_name}")
-        print(f"   Compute capability: {gpu_capability[0]}.{gpu_capability[1]}")
-
-        # Check FlashAttention availability
-        if gpu_capability[0] >= 8:
-            print("   ✓ FlashAttention-2 compatible GPU detected")
-
-        # Mixed precision settings
-        use_amp = True
-        amp_dtype = torch.float16  # Use bfloat16 if available on Ampere+
-        if gpu_capability[0] >= 8:
-            amp_dtype = torch.bfloat16
-            print("   ✓ Using bfloat16 for mixed precision")
-        else:
-            print("   ✓ Using float16 for mixed precision")
-
-    elif device_type == "mps":
-        # MPS (Apple Silicon) settings
-        print(f"🍎 MPS device: {platform.processor()}. Mixed precision disabled.")
-        use_amp = False
-        amp_dtype = torch.float32
-
-    else:
-        # CPU fallback
-        print("💻 CPU. Mixed precision disabled")
-        use_amp = False
-        amp_dtype = torch.float32
-
-    return device, use_amp, amp_dtype
 
 
 def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
@@ -230,7 +180,7 @@ def main(cfg: DictConfig):
     print(f"👨🏻‍🏫 Workers: {os.cpu_count()}")
 
     # Build model
-    model = instantiate(cfg.model_arch).to(device)
+    model = instantiate(cfg.model_arch, device=device).to(device)
 
     # Standard optimizer creation (keeping it simple)
     optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
@@ -279,7 +229,7 @@ def main(cfg: DictConfig):
         print(OmegaConf.to_yaml(cfg))
 
     # dataloaders
-    train_loader, val_loader = setup_train_dataloaders(cfg)
+    train_loader, val_loader = setup_test_dataloaders(cfg)
 
     # Training configuration
     best_metric_name = "ew_si_sdr_i"

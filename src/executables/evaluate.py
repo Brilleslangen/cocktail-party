@@ -1,8 +1,6 @@
 import os
-import time
-import glob
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import torch
 import torch.nn as nn
@@ -10,183 +8,20 @@ import numpy as np
 import hydra
 import wandb
 from tqdm import tqdm
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from hydra.utils import instantiate
 from tabulate import tabulate
 
-from src.data.collate import setup_train_dataloaders
+from src.data.collate import setup_test_dataloader
 from src.evaluate import compute_mask, count_parameters, count_macs
 from src.evaluate.train_metrics import energy_weighted_si_sdr_i
-from src.evaluate.eval_metrics import batch_estoi, batch_pesq
-from src.helpers import select_device, prettify_macs, prettify_param_count
+from src.evaluate.eval_metrics import batch_estoi, batch_pesq, compute_binaqual, compute_confusion_rate, compute_rtf
+from src.helpers import prettify_macs, prettify_param_count, setup_device_optimizations
 from src.data.streaming import Streamer
-from binaqual import calculate_binaqual
 
 
-def compute_binaqual(
-    est:  torch.Tensor,        # [B, 2, T]  – estimated / degraded
-    ref:  torch.Tensor,        # [B, 2, T]  – clean reference
-    mask: torch.Tensor | None = None,  # [B, T]  – 1 = valid sample
-    sample_rate: int = 16_000
-) -> torch.Tensor:
-    """
-    Return BINAQUAL localisation-similarity (0–1) for each item in a batch.
-
-    Parameters
-    ----------
-    est, ref :  stereo waveforms shaped [B, 2, T]  (any dtype / device)
-    mask     :  optional time-domain validity mask [B, T]  (1=keep, 0=skip)
-    sample_rate :  sampling rate in Hz (needs to match the tensors) *
-
-    * The patched loader inside `binaqual` defaults to 16 kHz.
-      If you work at 48 kHz (paper default), adjust that default once
-      at import time or resample tensors before calling this function.
-    """
-    if est.shape != ref.shape:
-        raise ValueError("est and ref must have identical shapes [B, 2, T]")
-
-    B, C, T = est.shape
-    if C != 2:
-        raise ValueError("BINAQUAL is defined for stereo signals (C == 2).")
-
-    if mask is not None and mask.shape != (B, T):
-        raise ValueError("mask must be [B, T] matching the time dimension.")
-
-    scores = []
-
-    # loop over the batch – calculate_binaqual is light-weight
-    for b in range(B):
-        # apply mask if given
-        idx = slice(None) if mask is None else mask[b].bool().cpu().numpy()
-
-        # (2, T) → (T, 2) → NumPy float32
-        ref_np = ref[b, :, idx].permute(1, 0).contiguous().cpu().float().numpy()
-        est_np = est[b, :, idx].permute(1, 0).contiguous().cpu().float().numpy()
-
-        # direct tensor input – no temp-files
-        nsim_vals, ls = calculate_binaqual(ref_np, est_np)
-        # ls is already the localisation-similarity  (product of NSIM_L & NSIM_R)
-        scores.append(torch.tensor(ls, dtype=torch.float32))
-
-    return torch.stack(scores)      # [B]
-
-
-def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor,
-                           mask: torch.Tensor, threshold_db: float = 0.0) -> torch.Tensor:
-    """
-    Compute confusion rate based on SDR difference threshold.
-    A sample is confused if separating the interferer gives better SDR than separating the target.
-
-    Args:
-        est: [B, 2, T] - estimated stereo signal
-        mix: [B, 2, T] - mixture stereo signal
-        ref: [B, 2, T] - reference stereo signal (target)
-        mask: [B, T] - valid samples mask
-        threshold_db: SDR difference threshold for confusion detection
-
-    Returns:
-        [B] - binary confusion indicator per sample (1 if confused, 0 if correct)
-    """
-    B = est.shape[0]
-    confused = torch.zeros(B, device=est.device)
-
-    for b in range(B):
-        # Extract mono signals for this sample
-        est_mono = est[b].mean(0)[mask[b] == 1]
-        mix_mono = mix[b].mean(0)[mask[b] == 1]
-        ref_mono = ref[b].mean(0)[mask[b] == 1]
-
-        # Compute interferer reference (mix - target)
-        interferer_mono = mix_mono - ref_mono
-
-        # Compute SDR with target as reference
-        sdr_target = compute_sdr_mono(est_mono, ref_mono)
-
-        # Compute SDR with interferer as reference
-        sdr_interferer = compute_sdr_mono(est_mono, interferer_mono)
-
-        # Check if model separated the interferer instead of target
-        if sdr_interferer > sdr_target + threshold_db:
-            confused[b] = 1.0
-
-    return confused
-
-
-def compute_sdr_mono(est: torch.Tensor, ref: torch.Tensor, eps: float = 1e-8) -> float:
-    """
-    Compute Signal-to-Distortion Ratio for mono signals.
-
-    Args:
-        est: [T] - estimated signal
-        ref: [T] - reference signal
-        eps: small value for numerical stability
-
-    Returns:
-        SDR in dB
-    """
-    # Find optimal scaling
-    alpha = (est * ref).sum() / ((ref ** 2).sum() + eps)
-
-    # Compute SDR
-    signal_power = (alpha * ref) ** 2
-    distortion_power = (est - alpha * ref) ** 2
-
-    sdr = 10 * torch.log10(signal_power.sum() / (distortion_power.sum() + eps))
-    return sdr.item()
-
-
-def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
-                num_runs: int = 10, device: torch.device = None) -> float:
-    """
-    Compute Real-Time Factor (RTF) - processing_time / audio_duration.
-    RTF < 1.0 means faster than real-time.
-
-    Args:
-        model: the model to evaluate
-        audio_duration: duration of audio to process in seconds
-        batch_size: batch size for inference
-        num_runs: number of runs for averaging
-        device: torch device
-
-    Returns:
-        RTF value
-    """
-    if device is None:
-        device = next(model.parameters()).device
-
-    sample_rate = model.sample_rate
-    num_samples = int(audio_duration * sample_rate)
-
-    # Create dummy input
-    dummy_input = torch.randn(batch_size, 2, num_samples, device=device)
-
-    # Warmup
-    with torch.no_grad():
-        for _ in range(3):
-            _ = model(dummy_input)
-
-    # Time the inference
-    if device.type == 'cuda':
-        torch.cuda.synchronize()
-
-    times = []
-    with torch.no_grad():
-        for _ in range(num_runs):
-            start = time.perf_counter()
-            _ = model(dummy_input)
-            if device.type == 'cuda':
-                torch.cuda.synchronize()
-            end = time.perf_counter()
-            times.append(end - start)
-
-    avg_time = np.mean(times)
-    rtf = avg_time / audio_duration
-
-    return rtf
-
-
-def evaluate_model(model: nn.Module, test_loader, device: torch.device,
-                   streaming_mode: bool = False) -> Dict[str, Tuple[float, float]]:
+def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: torch.device, use_amp: bool,
+                   amp_dtype: torch.dtype) -> Dict[str, Tuple[float, float]]:
     """
     Evaluate model on all metrics and return mean and std for each.
 
@@ -211,22 +46,26 @@ def evaluate_model(model: nn.Module, test_loader, device: torch.device,
             mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
             model_input = refs if use_targets_as_input else mix
 
-
             # Reset state for stateful models
             if hasattr(model, "reset_state"):
                 model.reset_state()
             elif hasattr(model, "separator") and hasattr(model.separator, "reset_state"):
                 model.separator.reset_state()
 
-            # Forward pass
-            if streaming_mode:
-                ests, refs_trimmed, lengths_trimmed = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
-                mix_trimmed = mix[..., streamer.pad_warmup:]
-                # Use trimmed versions
-                ests, refs, mix = ests, refs_trimmed, mix_trimmed
-                lengths = lengths_trimmed
+            # Forward pass with mixed precision
+            if use_amp and device.type == "cuda":
+                with torch.cuda.amp.autocast(dtype=amp_dtype):
+                    if streaming_mode:
+                        ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
+                        mix = mix[..., streamer.pad_warmup:]
+                    else:
+                        ests = model(model_input)
             else:
-                ests = model(model_input)
+                if streaming_mode:
+                    ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
+                    mix = mix[..., streamer.pad_warmup:]
+                else:
+                    ests = model(model_input)
 
             # Compute mask
             mask = compute_mask(lengths, ests.size(-1), ests.device)
@@ -248,7 +87,7 @@ def evaluate_model(model: nn.Module, test_loader, device: torch.device,
             all_pesq.extend(pesq.cpu().numpy())
 
             # BINAQUAL
-            binaqual = compute_binaqual(ests, refs, mask, sample_rate=model.sample_rate)
+            binaqual = compute_binaqual(ests, refs, mask, sample_rate=model.sample_rate, n_jobs=-1)
             all_binaqual.extend(binaqual.cpu().numpy())
 
             # Confusion Rate
@@ -387,7 +226,8 @@ def main(cfg: DictConfig):
     """
     Main evaluation script that downloads model from W&B and evaluates it.
     """
-    device = select_device()
+    device, use_amp, amp_dtype = setup_device_optimizations()
+    model_name = cfg.model_artifact.split(':')[0] if ':' in cfg.model_artifact else cfg.model_artifact
 
     # Parse arguments
     if not cfg.model_artifact:
@@ -401,27 +241,24 @@ def main(cfg: DictConfig):
             group=cfg.wandb.group,
             tags=cfg.wandb.tags,
             job_type='evaluation',
-            name=cfg.model_artifact,
+            name=model_name,
             reinit='finish_previous'
         )
 
         artifact = run.use_artifact(cfg.model_artifact, type="model")
         os.makedirs(cfg.training.model_save_dir, exist_ok=True)
         artifact_dir = artifact.download(root=cfg.training.model_save_dir)
-        pt_files = glob.glob(os.path.join(artifact_dir, "*.pt"))
-        if not pt_files:
-            raise FileNotFoundError(f"No .pt files found in artifact at {artifact_dir}")
-        checkpoint_path = pt_files[0]
-        print(f"📥 Found checkpoint from: {checkpoint_path}")
+        artifact_path = artifact_dir + f"/{model_name}.pt"
+        print(f"📥 Found checkpoint from: {artifact_path}")
     else:
         # Use local checkpoint
-        checkpoint_path = f"{cfg.training.model_save_dir}/{cfg.model_artifact}.pt"
-        print(f"[LOCAL] Using checkpoint at {checkpoint_path}")
+        artifact_path = f"{cfg.training.model_save_dir}/{model_name}.pt"
+        print(f"[LOCAL] Using checkpoint at {artifact_path}")
 
-    print(f"🔍 Evaluating model: {cfg.model_artifact}")
+    print(f"🔍 Evaluating model: {model_name}")
     print(f"📁 Experiment: {cfg.group}")
 
-    state = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    state = torch.load(artifact_path, map_location=device, weights_only=False)
 
     # Extract config from checkpoint
     if 'cfg' in state:
@@ -430,7 +267,7 @@ def main(cfg: DictConfig):
         raise ValueError("❌ Checkpoint does not contain model configuration.")
 
     # Build model
-    model = instantiate(artifact_cfg['model_arch']).to(device)
+    model = instantiate(artifact_cfg['model_arch'], device=device).to(device)
 
     # Load weights
     if "model_state" in state:
@@ -442,17 +279,22 @@ def main(cfg: DictConfig):
     print("✅ Model loaded successfully")
 
     # Get model statistics
-    param_count = count_parameters(model)
-    macs = count_macs(model)
-    pretty_params = prettify_param_count(param_count)
-    pretty_macs = prettify_macs(macs)
+    try:
+        param_count = count_parameters(model)
+        macs = count_macs(model)
+        pretty_params = prettify_param_count(param_count)
+        pretty_macs = prettify_macs(macs)
+    except Exception as e:
+        print(f"⚠️  Error counting parameters or MACs: {e}")
+        pretty_params = "-"
+        pretty_macs = "-"
 
     print(f"📊 Model Statistics:")
     print(f"   Parameters: {pretty_params}")
     print(f"   MACs/s: {pretty_macs}")
 
     # Setup test dataloader
-    _, test_loader = setup_train_dataloaders(cfg)
+    test_loader = setup_test_dataloader(cfg)
 
     # Check streaming mode
     streaming_mode = getattr(model, "streaming_mode", False)
@@ -460,7 +302,7 @@ def main(cfg: DictConfig):
 
     # Run evaluation
     print("\n🧪 Running evaluation...")
-    results = evaluate_model(model, test_loader, device, streaming_mode)
+    results = evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype)
 
     # Format results
     value_table, std_table = format_results_table(results, pretty_params, pretty_macs)
@@ -473,7 +315,7 @@ def main(cfg: DictConfig):
     print(std_table)
 
     # Save results
-    save_evaluation_results(cfg.group, cfg.model_artifact, value_table, std_table)
+    save_evaluation_results(cfg.group, model_name, value_table, std_table)
 
     # Log to W&B
     if cfg.wandb.enabled:
@@ -487,7 +329,7 @@ def main(cfg: DictConfig):
         wandb.log(wandb_results)
         wandb.finish()
 
-    print("\n✅ Evaluation complete!")
+    print("\n✅ Evaluation complete!\n\n")
 
 
 if __name__ == "__main__":

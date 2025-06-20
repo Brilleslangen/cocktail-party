@@ -5,6 +5,7 @@ from .helpers import (
     prettify_param_count,
     format_time,
     using_cuda,
+    setup_device_optimizations
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "prettify_param_count",
     "format_time",
     "using_cuda",
+    "setup_device_optimizations"
 ]

@@ -12,13 +12,13 @@ from src.evaluate import count_parameters, count_macs
 ######################################################################
 
 
-def build_and_publish(cfg: DictConfig, model_cfg: DictConfig, tag_suffix: str = ""):
+def build_and_publish(cfg: DictConfig):
     """
     Instantiates `model_cfg`, computes stats, writes a tiny checkpoint,
     and publishes it as a W&B model artifact.
     """
     device = select_device()
-    model = instantiate(model_cfg).to(device)
+    model = instantiate(cfg.model_arch).to(device)
 
     # ------------------------------------------------------------------
     # Stats
@@ -28,14 +28,14 @@ def build_and_publish(cfg: DictConfig, model_cfg: DictConfig, tag_suffix: str = 
         macs = count_macs(model)
         pretty_params = prettify_param_count(param_count)
         pretty_macs = prettify_macs(macs)
-    except RuntimeError as e:
+    except Exception as e:
         print(f"⚠️  Error counting parameters or MACs: {e}")
         param_count = "-"
         macs = "-"
         pretty_params = "-"
         pretty_macs = "-"
 
-    run_name = f"{cfg.name}_{pretty_params}"
+    run_name = f"{cfg.name}_{pretty_params}" if pretty_params != "-" else cfg.name
 
     # ------------------------------------------------------------------
     # W&B run
@@ -65,7 +65,7 @@ def build_and_publish(cfg: DictConfig, model_cfg: DictConfig, tag_suffix: str = 
 
     torch.save(
         {
-            "cfg": {"model_arch": OmegaConf.to_container(model_cfg, resolve=True)},
+            "cfg": {"model_arch": OmegaConf.to_container(cfg.model_arch, resolve=True)},
             "model_state": model.state_dict(),  # {} for oracle models
         },
         ckpt_path,

@@ -69,3 +69,35 @@ def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
         pin_memory=pin_memory,
     )
     return train_loader, val_loader
+
+
+def setup_test_dataloader(cfg: DictConfig) -> DataLoader:
+    """
+    Build testDataLoaders with bucketing and padding.
+    """
+    run = wandb.run
+    dataset_dir = run.use_artifact(cfg.dataset.artifact_name, type="dataset").download()
+    test_dir = os.path.join(dataset_dir, "test")
+    pin_memory = using_cuda()
+
+    test_ds = AudioDataset(test_dir, cfg.dataset.sample_rate)
+
+    # compute raw lengths (in samples) for bucketing
+    test_lengths = [torchaudio.info(p).num_frames for p in test_ds.mix_files]
+
+    test_sampler = BucketBatchSampler(
+        lengths=test_lengths,
+        batch_size=cfg.training.params.batch_size,
+        n_buckets=cfg.training.params.n_buckets,
+        shuffle=True
+    )
+
+    test_loader = DataLoader(
+        test_ds,
+        batch_sampler=test_sampler,
+        collate_fn=pad_collate,
+        num_workers=cfg.training.params.num_workers,
+        pin_memory=pin_memory,
+    )
+
+    return test_loader

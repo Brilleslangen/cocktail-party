@@ -1,16 +1,66 @@
 import torch
+import platform
 from omegaconf import OmegaConf
 
 OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
 
 
-def select_device():
+def select_device() -> torch.device:
     if torch.backends.mps.is_available():
         return torch.device("mps")
     elif torch.cuda.is_available():
         return torch.device("cuda")
     else:
         return torch.device("cpu")
+
+
+def setup_device_optimizations():
+    """Configure device-specific optimizations."""
+    device = select_device()
+    device_type = device.type
+
+    # Device-specific settings
+    if device_type == "cuda":
+        # Enable TF32 on Ampere GPUs for better performance
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+
+        # Enable cudnn benchmarking for consistent input sizes
+        torch.backends.cudnn.benchmark = True
+
+        # Get GPU info for logging
+        gpu_name = torch.cuda.get_device_name()
+        gpu_capability = torch.cuda.get_device_capability()
+
+        print(f"🚀 CUDA device: {gpu_name}")
+        print(f"   Compute capability: {gpu_capability[0]}.{gpu_capability[1]}")
+
+        # Check FlashAttention availability
+        if gpu_capability[0] >= 8:
+            print("   ✓ FlashAttention-2 compatible GPU detected")
+
+        # Mixed precision settings
+        use_amp = True
+        amp_dtype = torch.float16  # Use bfloat16 if available on Ampere+
+        if gpu_capability[0] >= 8:
+            amp_dtype = torch.bfloat16
+            print("   ✓ Using bfloat16 for mixed precision")
+        else:
+            print("   ✓ Using float16 for mixed precision")
+
+    elif device_type == "mps":
+        # MPS (Apple Silicon) settings
+        print(f"🍎 MPS device: {platform.processor()}. Mixed precision disabled.")
+        use_amp = False
+        amp_dtype = torch.float32
+
+    else:
+        # CPU fallback
+        print("💻 CPU. Mixed precision disabled")
+        use_amp = False
+        amp_dtype = torch.float32
+
+    return device, use_amp, amp_dtype
 
 
 def using_cuda():
