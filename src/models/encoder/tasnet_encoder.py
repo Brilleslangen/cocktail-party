@@ -27,7 +27,7 @@ class TasNetEncoder(SubModule):
             bias=False
         )
 
-        self.relu = nn.ReLU()  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
+        # self.relu = nn.ReLU()  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -44,7 +44,7 @@ class TasNetEncoder(SubModule):
         # print("[Encoder] Conv1d Output NaNs:", torch.isnan(out).any().item(), "| Max:", out.max().item(), "| Min:", out.min().item())
 
         # ReLU
-        out = self.relu(out)
+        # out = self.relu(out)
         # print("[Encoder] ReLU Output NaNs:", torch.isnan(out).any().item(), "| Max:", out.max().item(), "| Min:", out.min().item())
 
         return out

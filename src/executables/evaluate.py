@@ -14,14 +14,13 @@ from tabulate import tabulate
 
 from src.data.collate import setup_test_dataloader
 from src.evaluate import compute_mask, count_parameters, count_macs
-from src.evaluate.train_metrics import energy_weighted_si_sdr_i
-from src.evaluate.eval_metrics import batch_estoi, batch_pesq, compute_binaqual, compute_confusion_rate, compute_rtf
+from src.evaluate.eval_metrics import compute_evaluation_metrics, compute_rtf
 from src.helpers import prettify_macs, prettify_param_count, setup_device_optimizations
 from src.data.streaming import Streamer
 
 
-def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: torch.device, use_amp: bool,
-                   amp_dtype: torch.dtype) -> Dict[str, Tuple[float, float]]:
+def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: torch.device,
+                   use_amp: bool, amp_dtype: torch.dtype) -> Dict[str, Tuple[float, float]]:
     """
     Evaluate model on all metrics and return mean and std for each.
 
@@ -31,12 +30,18 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
     model.eval()
     streamer = Streamer(model) if streaming_mode else None
 
-    # Metric accumulators
-    all_si_sdr_i = []
-    all_estoi = []
-    all_pesq = []
-    all_binaqual = []
-    all_confusion = []
+    # Initialize metric accumulators similar to validate_epoch
+    totals = {
+        "ew_si_sdr_i": 0.0,
+        "ew_estoi": 0.0,
+        "ew_pesq": 0.0,
+        "binaqual": 0.0,
+        "confusion_rate": 0.0
+    }
+
+    # For computing std
+    squares = {k: 0.0 for k in totals}
+    total_examples = 0
 
     use_targets_as_input = getattr(model, "use_targets_as_input", False)
     print(f"🎯 Using targets as input: {use_targets_as_input}")
@@ -67,45 +72,47 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
                 else:
                     ests = model(model_input)
 
+            B = ests.size(0)
+
             # Compute mask
             mask = compute_mask(lengths, ests.size(-1), ests.device)
 
-            # Energy-weighted SI-SDRi
-            si_sdr_i = energy_weighted_si_sdr_i(ests, mix, refs, mask)
-            all_si_sdr_i.extend(si_sdr_i.cpu().numpy())
+            # Compute all evaluation metrics using the abstracted function
+            metrics = compute_evaluation_metrics(ests, mix, refs, model.sample_rate)
 
-            # ESTOI (per channel then average)
-            estoi_left = batch_estoi(ests[:, 0, :], refs[:, 0, :], model.sample_rate)
-            estoi_right = batch_estoi(ests[:, 1, :], refs[:, 1, :], model.sample_rate)
-            estoi = (estoi_left + estoi_right) / 2
-            all_estoi.extend(estoi.cpu().numpy())
+            # Accumulate metrics
+            for metric_name, metric_values in metrics.items():
+                totals[metric_name] += metric_values.sum().item()
+                squares[metric_name] += (metric_values ** 2).sum().item()
 
-            # PESQ (per channel then average)
-            pesq_left = batch_pesq(ests[:, 0, :], refs[:, 0, :], model.sample_rate, mode='wb')
-            pesq_right = batch_pesq(ests[:, 1, :], refs[:, 1, :], model.sample_rate, mode='wb')
-            pesq = (pesq_left + pesq_right) / 2
-            all_pesq.extend(pesq.cpu().numpy())
+            total_examples += B
 
-            # BINAQUAL
-            binaqual = compute_binaqual(ests, refs, mask, sample_rate=model.sample_rate, n_jobs=-1)
-            all_binaqual.extend(binaqual.cpu().numpy())
+    # Compute mean and std for each metric
+    results = {}
+    for metric_name in totals:
+        mean = totals[metric_name] / total_examples
+        variance = (squares[metric_name] / total_examples) - (mean ** 2)
+        std = np.sqrt(max(0, variance))  # Avoid negative variance due to numerical errors
 
-            # Confusion Rate
-            confusion = compute_confusion_rate(ests, mix, refs, mask)
-            all_confusion.extend(confusion.cpu().numpy())
+        # Format the output names
+        if metric_name == 'ew_si_sdr_i':
+            display_name = 'EW-SI-SDRi (dB)'
+        elif metric_name == 'ew_estoi':
+            display_name = 'ESTOI'
+        elif metric_name == 'ew_pesq':
+            display_name = 'PESQ'
+        elif metric_name == 'binaqual':
+            display_name = 'BINAQUAL'
+        elif metric_name == 'confusion_rate':
+            display_name = 'Confusion Rate (%)'
+            mean *= 100  # Convert to percentage
+            std *= 100
+
+        results[display_name] = (mean, std)
 
     # Compute RTF
     rtf = compute_rtf(model, audio_duration=1.0, device=device)
-
-    # Compute mean and std for each metric
-    results = {
-        'EW-SI-SDRi (dB)': (np.mean(all_si_sdr_i), np.std(all_si_sdr_i)),
-        'ESTOI': (np.mean(all_estoi), np.std(all_estoi)),
-        'PESQ': (np.mean(all_pesq), np.std(all_pesq)),
-        'BINAQUAL ': (np.mean(all_binaqual), np.std(all_binaqual)),
-        'Confusion Rate (%)': (np.mean(all_confusion) * 100, np.std(all_confusion) * 100),
-        'RTF': (rtf, 0.0)  # RTF doesn't have std
-    }
+    results['RTF'] = (rtf, 0.0)  # RTF doesn't have std
 
     return results
 
@@ -136,10 +143,10 @@ def format_results_table(results: Dict[str, Tuple[float, float]],
             elif metric == 'RTF':
                 values.append(f"{value:.3f}")
                 stds.append("N/A")
-            elif metric in ['EW-SI-SDRi (dB)', 'ILD-RMSE (dB)']:
+            elif metric in ['EW-SI-SDRi (dB)']:
                 values.append(f"{value:.2f}")
                 stds.append(f"{std:.2f}")
-            else:  # ESTOI, PESQ
+            else:  # ESTOI, PESQ, BINAQUAL
                 values.append(f"{value:.3f}")
                 stds.append(f"{std:.3f}")
 
@@ -322,9 +329,10 @@ def main(cfg: DictConfig):
         wandb_results = {}
         for metric, (value, std) in results.items():
             if isinstance(value, (int, float)):
-                wandb_results[f"eval/{metric.replace(' ', '_').replace('(', '').replace(')', '')}"] = value
+                metric_key = metric.replace(' ', '_').replace('(', '').replace(')', '').replace('%', '')
+                wandb_results[f"eval/{metric_key}"] = value
                 if isinstance(std, (int, float)) and std != 0.0:
-                    wandb_results[f"eval/{metric.replace(' ', '_').replace('(', '').replace(')', '')}_std"] = std
+                    wandb_results[f"eval/{metric_key}_std"] = std
 
         wandb.log(wandb_results)
         wandb.finish()

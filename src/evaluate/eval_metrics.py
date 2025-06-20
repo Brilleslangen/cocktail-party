@@ -1,5 +1,5 @@
 import time
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Dict
 
 import numpy as np
 import torch
@@ -10,6 +10,8 @@ from torchmetrics.audio import PerceptualEvaluationSpeechQuality
 from torchmetrics.audio import ShortTimeObjectiveIntelligibility
 from binaqual import calculate_binaqual
 from joblib import Parallel, delayed
+
+from src.evaluate.train_metrics import energy_weighted_si_sdr_i
 
 
 # ============================================================================
@@ -112,31 +114,85 @@ def batch_pesq(est, ref, sample_rate=16000, mode='wb'):
         return torch.tensor(scores, device=device)
 
 
+def energy_weighted_estoi(est, ref, sample_rate=16000, eps=1e-8):
+    """
+    Energy-weighted Extended Short-Time Objective Intelligibility for stereo signals.
+
+    Args:
+        est: [B, 2, T] - estimated stereo signal
+        ref: [B, 2, T] - reference stereo signal
+        sample_rate: sampling rate
+        eps: small value for numerical stability
+
+    Returns:
+        [B] - energy-weighted ESTOI per sample
+    """
+    # Compute per-channel ESTOI
+    estoi_left = batch_estoi(est[:, 0, :], ref[:, 0, :], sample_rate)
+    estoi_right = batch_estoi(est[:, 1, :], ref[:, 1, :], sample_rate)
+
+    # Compute channel energies for weighting
+    energy_left = (ref[:, 0, :] ** 2).sum(dim=1)
+    energy_right = (ref[:, 1, :] ** 2).sum(dim=1)
+    total_energy = energy_left + energy_right + eps
+
+    # Weight by energy
+    weight_left = energy_left / total_energy
+    weight_right = energy_right / total_energy
+
+    return weight_left * estoi_left + weight_right * estoi_right
+
+
+def energy_weighted_pesq(est, ref, sample_rate=16000, mode='wb', eps=1e-8):
+    """
+    Energy-weighted Perceptual Evaluation of Speech Quality for stereo signals.
+
+    Args:
+        est: [B, 2, T] - estimated stereo signal
+        ref: [B, 2, T] - reference stereo signal
+        sample_rate: sampling rate
+        mode: PESQ mode ('wb' or 'nb')
+        eps: small value for numerical stability
+
+    Returns:
+        [B] - energy-weighted PESQ per sample
+    """
+    # Compute per-channel PESQ
+    pesq_left = batch_pesq(est[:, 0, :], ref[:, 0, :], sample_rate, mode)
+    pesq_right = batch_pesq(est[:, 1, :], ref[:, 1, :], sample_rate, mode)
+
+    # Compute channel energies for weighting
+    energy_left = (ref[:, 0, :] ** 2).sum(dim=1)
+    energy_right = (ref[:, 1, :] ** 2).sum(dim=1)
+    total_energy = energy_left + energy_right + eps
+
+    # Weight by energy
+    weight_left = energy_left / total_energy
+    weight_right = energy_right / total_energy
+
+    return weight_left * pesq_left + weight_right * pesq_right
+
+
 def _prep_one(
-    ref:  torch.Tensor,        # [2, T]             (on any device / dtype)
-    est:  torch.Tensor,        # [2, T]
-    idx:  slice | np.ndarray,  # full slice or boolean mask
-    fs:   int
+        ref: torch.Tensor,  # [2, T]             (on any device / dtype)
+        est: torch.Tensor,  # [2, T]
 ) -> float:
     """
-    Helper that converts a *single* (ref, est) pair to NumPy, applies the mask,
+    Helper that converts a *single* (ref, est) pair to NumPy,
     calls `calculate_binaqual`, and returns the localisation-similarity (LS).
     Runs on CPU so it is safe inside a joblib worker.
     """
-    # (2, T)[mask] → (T, 2)  np.float32
-    ref_np = ref[:, idx].permute(1, 0).contiguous().cpu().float().numpy()
-    est_np = est[:, idx].permute(1, 0).contiguous().cpu().float().numpy()
+    ref_np = ref.permute(1, 0).contiguous().cpu().float().numpy()
+    est_np = est.permute(1, 0).contiguous().cpu().float().numpy()
 
     _, ls = calculate_binaqual(ref_np, est_np)
     return ls
 
 
 def compute_binaqual(
-    est:         torch.Tensor,            # [B, 2, T]
-    ref:         torch.Tensor,            # [B, 2, T]
-    mask:        Optional[torch.Tensor] = None,  # [B, T] or None
-    sample_rate: int = 16000,
-    n_jobs:      int = 0                  # 0 = serial, -1 = “all cores”, >0 = explicit
+        est: torch.Tensor,  # [B, 2, T]
+        ref: torch.Tensor,  # [B, 2, T]
+        n_jobs: int = 0  # 0 = serial, -1 = "all cores", >0 = explicit
 ) -> torch.Tensor:
     """
     Batched BINAQUAL localisation-similarity.
@@ -151,11 +207,8 @@ def compute_binaqual(
         raise ValueError("est and ref must have the same shape [B, 2, T].")
     if est.size(1) != 2:
         raise ValueError("BINAQUAL is defined for stereo signals (C == 2).")
-    if mask is not None and mask.shape != est.shape[::2]:
-        raise ValueError("mask must be [B, T] to match est/ref.")
 
     B, _, _ = est.shape
-    mask_cpu = mask.bool().cpu().numpy() if mask is not None else None
 
     # ----------------------------------------------------------------------
     # choose serial vs. parallel execution
@@ -163,17 +216,13 @@ def compute_binaqual(
     if n_jobs == 0 or B == 1:
         # plain Python loop – minimal overhead, fine for small batches
         ls_values: Sequence[float] = [
-            _prep_one(ref[b], est[b],
-                      slice(None) if mask is None else mask_cpu[b],
-                      sample_rate)
+            _prep_one(ref[b], est[b])
             for b in range(B)
         ]
     else:
         # parallel worker pool (fork or spawn depending on OS)
         ls_values = Parallel(n_jobs=n_jobs, backend="loky")(
-            delayed(_prep_one)(ref[b], est[b],
-                               slice(None) if mask is None else mask_cpu[b],
-                               sample_rate)
+            delayed(_prep_one)(ref[b], est[b])
             for b in range(B)
         )
 
@@ -181,8 +230,8 @@ def compute_binaqual(
     return torch.tensor(ls_values, dtype=torch.float32, device=est.device)
 
 
-def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor,
-                           mask: torch.Tensor, threshold_db: float = 0.0) -> torch.Tensor:
+def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor, threshold_db: float = 0.0)\
+        -> torch.Tensor:
     """
     Compute confusion rate based on SDR difference threshold.
     A sample is confused if separating the interferer gives better SDR than separating the target.
@@ -191,7 +240,6 @@ def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tens
         est: [B, 2, T] - estimated stereo signal
         mix: [B, 2, T] - mixture stereo signal
         ref: [B, 2, T] - reference stereo signal (target)
-        mask: [B, T] - valid samples mask
         threshold_db: SDR difference threshold for confusion detection
 
     Returns:
@@ -202,9 +250,9 @@ def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tens
 
     for b in range(B):
         # Extract mono signals for this sample
-        est_mono = est[b].mean(0)[mask[b] == 1]
-        mix_mono = mix[b].mean(0)[mask[b] == 1]
-        ref_mono = ref[b].mean(0)[mask[b] == 1]
+        est_mono = est[b].mean(0)
+        mix_mono = mix[b].mean(0)
+        ref_mono = ref[b].mean(0)
 
         # Compute interferer reference (mix - target)
         interferer_mono = mix_mono - ref_mono
@@ -293,3 +341,44 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
     rtf = avg_time / audio_duration
 
     return rtf
+
+
+def compute_evaluation_metrics(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor,
+                                sample_rate: int = 16000) -> Dict[str, torch.Tensor]:
+    """
+    Compute all evaluation metrics with energy weighting where appropriate.
+
+    Args:
+        est: [B, 2, T] - estimated stereo signal
+        mix: [B, 2, T] - mixture stereo signal
+        ref: [B, 2, T] - reference stereo signal
+        sample_rate: audio sample rate
+
+    Returns:
+        dict with metric names and [B] tensor values
+    """
+    metrics = {
+        'ew_si_sdr_i': energy_weighted_si_sdr_i(est, mix, ref),
+        'ew_estoi': energy_weighted_estoi(est, ref, sample_rate),
+        'ew_pesq': energy_weighted_pesq(est, ref, sample_rate),
+        'binaqual': compute_binaqual(est, ref, n_jobs=-1),
+        'confusion_rate': compute_confusion_rate(est, mix, ref)
+    }
+
+    return metrics
+
+
+# Export all public functions
+__all__ = [
+    'count_parameters',
+    'count_macs',
+    'batch_estoi',
+    'batch_pesq',
+    'energy_weighted_estoi',
+    'energy_weighted_pesq',
+    'compute_binaqual',
+    'compute_confusion_rate',
+    'compute_sdr_mono',
+    'compute_rtf',
+    'compute_evaluation_metrics'
+]

@@ -11,7 +11,7 @@ from hydra.utils import instantiate
 from torch import nn
 from torch.utils.data import DataLoader
 
-from src.data.collate import setup_test_dataloaders
+from src.data.collate import setup_train_dataloaders
 from src.evaluate import Loss, compute_mask, compute_validation_metrics, count_parameters, count_macs
 from src.evaluate.loss import MaskedMSELoss
 from src.helpers import (
@@ -229,7 +229,7 @@ def main(cfg: DictConfig):
         print(OmegaConf.to_yaml(cfg))
 
     # dataloaders
-    train_loader, val_loader = setup_test_dataloaders(cfg)
+    train_loader, val_loader = setup_train_dataloaders(cfg)
 
     # Training configuration
     best_metric_name = "ew_si_sdr_i"
