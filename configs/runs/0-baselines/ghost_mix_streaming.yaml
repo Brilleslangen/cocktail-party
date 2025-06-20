@@ -9,10 +9,12 @@ defaults:
 
   - override /model_arch/separator: ghost
 
-name: ${model_arch.name}-offline
+name: ${model_arch.name}-mix-streaming
+group: 0-baselines
 
 # Adjustments
 model_arch:
   no_separator: true
   use_spatial_features: false
-  use_targets_as_input: true
+  use_targets_as_input: false
+  streaming_mode: true

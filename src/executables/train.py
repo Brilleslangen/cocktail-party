@@ -226,7 +226,6 @@ def main(cfg: DictConfig):
     # Setup device and optimizations
     device, use_amp, amp_dtype = setup_device_optimizations()
     torch.manual_seed(cfg.training.params.seed)
-    OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
 
     print(f"👨🏻‍🏫 Workers: {os.cpu_count()}")
 
@@ -273,9 +272,8 @@ def main(cfg: DictConfig):
             name=run_name,
             reinit='finish_previous'
         )
-        wandb.run.summary["model/param_count"] = param_count
-        wandb.run.summary["model/macs_per_second"] = macs
-        wandb.run.summary["model/macs_pretty"] = pretty_macs
+        wandb.run.summary["model/param_count"] = pretty_param_count
+        wandb.run.summary["model/macs_per_second"] = pretty_macs
 
     if cfg.training.print_config:
         print(OmegaConf.to_yaml(cfg))

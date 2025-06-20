@@ -1,5 +1,5 @@
 enabled: true
 project: cocktail-party
 entity: ntnu123
-group: ${name}    # groups runs by job name in the UI
+group: ${group}    # groups runs by job name in the UI
 tags: []                    # tags for the run

@@ -34,8 +34,8 @@ def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
     val_dir = os.path.join(dataset_dir, "val")
     pin_memory = using_cuda()
 
-    train_ds = AudioDataset(train_dir, cfg.model_arch.sample_rate)
-    val_ds = AudioDataset(val_dir, cfg.model_arch.sample_rate)
+    train_ds = AudioDataset(train_dir, cfg.dataset.sample_rate)
+    val_ds = AudioDataset(val_dir, cfg.dataset.sample_rate)
 
     # compute raw lengths (in samples) for bucketing
     train_lengths = [torchaudio.info(p).num_frames for p in train_ds.mix_files]

@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+  - /dataset: static_big         # Dataset selection
+  - /training: default
+  - /wandb: default
+  - _self_
+
+group: 0-baselines
+model_artifact: tasnet-offline_8.19K:latest #{oracle_mix, oracle_targets, oracle_mix_streaming, oracle_targets_streaming, ghost_mix, ghost_targets,
+                 #host_mix_streaming, ghost_targets_streaming}
+
+wandb:
+  tags: [evaluation]

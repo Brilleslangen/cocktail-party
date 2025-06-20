@@ -7,9 +7,11 @@ defaults:
   - /inference: default
   - _self_
 
-name: ${model_arch.name}-offline
+name: ${model_arch.name}-mix-offline
+group: 0-baselines
 
 # Adjustments
 model_arch:
   use_spatial_features: false
   use_targets_as_input: false
+  streaming_mode: false

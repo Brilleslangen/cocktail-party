@@ -1,4 +1,7 @@
 import torch
+from omegaconf import OmegaConf
+
+OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
 
 
 def select_device():
