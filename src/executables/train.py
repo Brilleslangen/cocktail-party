@@ -10,8 +10,6 @@ from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.nn import DataParallel
-
 
 from src.data.collate import setup_train_dataloaders
 from src.evaluate import Loss, compute_mask, compute_validation_metrics, count_parameters, count_macs
@@ -24,11 +22,6 @@ from src.helpers import (
 from src.data.streaming import Streamer
 
 
-def unwrap_model(model: nn.Module) -> nn.Module:
-    """Return the underlying model, handling DataParallel wrappers."""
-    return model.module if isinstance(model, DataParallel) else model
-
-
 def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 optimizer: torch.optim.Optimizer, device: torch.device,
                 use_amp: bool, amp_dtype: torch.dtype):
@@ -39,14 +32,13 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
     model.train()
     total_loss = 0.0
     total_mse_loss = 0.0
-    base_model = unwrap_model(model)
-    streaming_mode = getattr(base_model, "streaming_mode", False)
-    streamer = Streamer(base_model) if streaming_mode else None
+    streaming_mode = getattr(model, "streaming_mode", False)
+    streamer = Streamer(model) if streaming_mode else None
     mse_loss_fn = MaskedMSELoss()
 
     # Setup mixed precision
     scaler = torch.cuda.amp.GradScaler() if (use_amp and device.type == "cuda") else None
-    use_targets_as_input = getattr(base_model, "use_targets_as_input", False)
+    use_targets_as_input = getattr(model, "use_targets_as_input", False)
 
     pbar = tqdm(loader, total=len(loader), desc="Train", leave=False)
 
@@ -101,8 +93,8 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
 
         pbar.set_postfix(loss=f"{loss_val:.4f}", mse=f"{mse_loss_val:.4f}")
 
-        if hasattr(base_model, "separator") and getattr(base_model.separator, "stateful", False):
-            base_model.reset_state()
+        if model.separator.stateful:
+            model.reset_state()
 
     return total_loss / len(loader), total_mse_loss / len(loader)
 
@@ -111,9 +103,8 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
                    device: torch.device, use_amp: bool, amp_dtype: torch.dtype):
     """Validation with energy-weighted metrics."""
     model.eval()
-    base_model = unwrap_model(model)
-    streaming_mode = getattr(base_model, "streaming_mode", False)
-    streamer = Streamer(base_model) if streaming_mode else None
+    streaming_mode = getattr(model, "streaming_mode", False)
+    streamer = Streamer(model) if streaming_mode else None
 
     # Initialize metric accumulators
     totals = {
@@ -128,18 +119,18 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
     with torch.no_grad():
         for mix, refs, lengths in tqdm(loader, desc="Validate", leave=False):
             mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
-            model_input = refs if getattr(base_model, "use_targets_as_input", False) else mix
+            model_input = refs if model.use_targets_as_input else mix
 
-            if getattr(base_model, "use_targets_as_input", False):
+            if model.use_targets_as_input:
                 # Assert that targets and references are the same
                 assert torch.allclose(model_input, refs,
                                       atol=1e-6), "Mix and references must be the same when using targets as input."
 
             # Reset state for stateful models
-            if hasattr(base_model, "reset_state"):
-                base_model.reset_state()
-            elif hasattr(base_model, "separator") and hasattr(base_model.separator, "reset_state"):
-                base_model.separator.reset_state()
+            if hasattr(model, "reset_state"):
+                model.reset_state()
+            elif hasattr(model, "separator") and hasattr(model.separator, "reset_state"):
+                model.separator.reset_state()
 
             # Forward pass with mixed precision
             if use_amp and device.type == "cuda":
@@ -188,31 +179,14 @@ def main(cfg: DictConfig):
     # Build model
     model = instantiate(cfg.model_arch, device=device).to(device)
 
-    if device.type == "cuda" and torch.cuda.device_count() > 1:
-        n = torch.cuda.device_count()
-        print(f"🧩 Using DataParallel on {n} GPUs")
-        model = DataParallel(model)
-        # Expose important attributes on the wrapper for convenience
-        for attr in [
-            "streaming_mode",
-            "use_targets_as_input",
-            "separator",
-            "device",
-            "input_size",
-            "output_size",
-        ]:
-            if hasattr(model.module, attr):
-                setattr(model, attr, getattr(model.module, attr))
-
     # Standard optimizer creation (keeping it simple)
     optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
     scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer, _recursive_=False)
     loss = instantiate(cfg.training.loss).to(device)
 
     # Calculate composite figures and init wandb
-    base_model = unwrap_model(model)
-    param_count = count_parameters(base_model)
-    macs = count_macs(base_model)
+    param_count = count_parameters(model)
+    macs = count_macs(model)
     pretty_macs = prettify_macs(macs)
     pretty_param_count = prettify_param_count(param_count)
     run_name = f"{cfg.name}_{pretty_param_count}"
@@ -320,7 +294,7 @@ def main(cfg: DictConfig):
             torch.save({
                 "epoch": epoch,
                 "cfg": cfg_dict,
-                "model_state": unwrap_model(model).state_dict(),
+                "model_state": model.state_dict(),
                 "opt_state": optimizer.state_dict(),
                 "sched_state": scheduler.state_dict(),
                 "val_stats": val_stats,
