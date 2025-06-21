@@ -1,6 +1,6 @@
 # @package hydra.launcher
 defaults:
-  - /hydra/launcher: submitit_slurm   # << inherits all submitit_* keys
+  - submitit_slurm   # << inherits all submitit_* keys
   - _self_                           # … then let THIS file override fields
 
 partition: GPUQ
