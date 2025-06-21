@@ -1,6 +1,5 @@
 # @package _global_
 defaults:
-  - optional /private: env
   - /dataset: static_big         # Dataset selection
   - /training: default
   - /wandb: default

@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
   - _self_
-  - optional /private: env
   - /runs/baselines: oracle_mix
+
 
 hydra:
   mode: MULTIRUN
