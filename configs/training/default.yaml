@@ -1,5 +1,5 @@
 params:
-  batch_size:   512
+  batch_size:   132
   num_workers:  64
   max_epochs:  100
   n_buckets:   10
@@ -20,7 +20,7 @@ scheduler:
   eta_min:   1e-6
 
 early_stopping:
-  patience: 10
+  patience: 20
   min_delta: 0.0
 
 model_save_dir: "artifacts"
