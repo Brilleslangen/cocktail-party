@@ -21,15 +21,15 @@ PROJECT_DIR="$REPO_ROOT"
 cd "$PROJECT_DIR"
 
 # Clone binaqual-pkg if it doesn't exist
-BINAQUAL_DIR="$PROJECT_DIR/../binaqual-pkg"
-if [ ! -d "$BINAQUAL_DIR" ]; then
-    echo "🎵 Cloning binaqual-pkg..."
-    cd "$PROJECT_DIR/.."
-    git clone https://github.com/Brilleslangen/binaqual-pkg.git
-    cd "$PROJECT_DIR"
-else
-    echo "🎵 binaqual-pkg already exists"
-fi
+#BINAQUAL_DIR="$PROJECT_DIR/../binaqual-pkg"
+#if [ ! -d "$BINAQUAL_DIR" ]; then
+#    echo "🎵 Cloning binaqual-pkg..."
+#    cd "$PROJECT_DIR/.."
+#    git clone https://github.com/Brilleslangen/binaqual-pkg.git
+#    cd "$PROJECT_DIR"
+#else
+#    echo "🎵 binaqual-pkg already exists"
+#fi
 
 # Create virtual environment
 VENV_DIR="$PROJECT_DIR/venv"
@@ -53,9 +53,9 @@ echo "🔥 Installing PyTorch with CUDA support..."
 pip install "torch~=2.7.1" "torchvision" "torchaudio~=2.7.0" --index-url https://download.pytorch.org/whl/cu121
 # If using CUDA 12.6, you might need to use a different index URL or check PyTorch compatibility
 
-# Install binaqual-pkg
-echo "🎵 Installing binaqual-pkg..."
-pip install ../binaqual-pkg
+## Install binaqual-pkg
+#echo "🎵 Installing binaqual-pkg..."
+#pip install ../binaqual-pkg
 
 # Install mamba-ssm and causal-conv1d (requires CUDA)
 echo "🐍 Installing Mamba dependencies..."
