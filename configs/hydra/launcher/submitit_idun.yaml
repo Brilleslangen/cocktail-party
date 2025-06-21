@@ -9,4 +9,4 @@ nodes: 1
 gres: gpu:1
 #constraint: "v100|a100"
 mem_gb: 32
-timeout_min: 720 # 12 hours
+timeout_min: 1500 # 25 hours
