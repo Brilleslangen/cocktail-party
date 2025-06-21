@@ -1,4 +1,6 @@
 # @package hydra.launcher
+_target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
+
 defaults:
   - /hydra/launcher: submitit_slurm   # << inherits all submitit_* keys
   - _self_                           # … then let THIS file override fields
