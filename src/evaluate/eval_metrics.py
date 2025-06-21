@@ -8,8 +8,12 @@ from torch.utils.flop_counter import FlopCounterMode
 
 from torchmetrics.audio import PerceptualEvaluationSpeechQuality
 from torchmetrics.audio import ShortTimeObjectiveIntelligibility
-from binaqual import calculate_binaqual
 from joblib import Parallel, delayed
+
+try :
+    from binaqual import calculate_binaqual
+except ImportError:
+    raise ImportError("Please install the 'binaqual' package to use BINAQUAL metrics in full evaluation..")
 
 from src.evaluate.train_metrics import energy_weighted_si_sdr_i
 
