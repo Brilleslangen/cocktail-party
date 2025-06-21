@@ -8,4 +8,4 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      runs/baselines: ghost_targets, ghost_mix, ghost_targets_streaming, ghost_mix_streaming
+      runs/baselines: ghost_targets #, ghost_mix, ghost_targets_streaming, ghost_mix_streaming
