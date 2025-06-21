@@ -11,6 +11,7 @@ module purge
 module load Python/3.11.3-GCCcore-12.3.0  # Required for mamba-ssm
 module load CUDA/12.1.1  # or CUDA/12.6.0 if available - check with 'module avail CUDA'
 module load cuDNN/8.9.2.26-CUDA-12.1.1  # For deep learning
+module load libsndfile/1.0.31-GCCcore-12.3.0  # For soundfile
 
 # Determine repository root (directory one level up from this script)
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,6 +19,17 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Use repository root as project directory
 PROJECT_DIR="$REPO_ROOT"
 cd "$PROJECT_DIR"
+
+# Clone binaqual-pkg if it doesn't exist
+BINAQUAL_DIR="$PROJECT_DIR/../binaqual-pkg"
+if [ ! -d "$BINAQUAL_DIR" ]; then
+    echo "🎵 Cloning binaqual-pkg..."
+    cd "$PROJECT_DIR/.."
+    git clone https://github.com/Brilleslangen/binaqual-pkg.git
+    cd "$PROJECT_DIR"
+else
+    echo "🎵 binaqual-pkg already exists"
+fi
 
 # Create virtual environment
 VENV_DIR="$PROJECT_DIR/venv"
@@ -38,12 +50,16 @@ pip install --upgrade pip wheel setuptools
 # Install PyTorch with CUDA support (adjust CUDA version as needed)
 echo "🔥 Installing PyTorch with CUDA support..."
 # For CUDA 12.1
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install "torch~=2.7.1" "torchvision" "torchaudio~=2.7.0" --index-url https://download.pytorch.org/whl/cu121
 # If using CUDA 12.6, you might need to use a different index URL or check PyTorch compatibility
+
+# Install binaqual-pkg
+echo "🎵 Installing binaqual-pkg..."
+pip install ../binaqual-pkg
 
 # Install mamba-ssm and causal-conv1d (requires CUDA)
 echo "🐍 Installing Mamba dependencies..."
-if pip install --no-build-isolation mamba-ssm[causal-conv1d]; then
+if pip install --no-build-isolation causal-conv1d==1.5.0.post8 mamba-ssm==2.2.4; then
     echo "✅ Mamba-SSM installed successfully"
 else
     echo "⚠️  Mamba-SSM installation failed. This is optional - other models will still work."
@@ -53,15 +69,18 @@ fi
 # Install remaining requirements
 echo "📦 Installing remaining requirements..."
 pip install hydra-core==1.3.2
-pip install numpy~=2.0.0  # Compatible with Python 3.11
+pip install numpy~=2.2.5
 pip install omegaconf==2.3.0
-pip install "scipy>=1.10.0"  # More flexible version
-pip install soundfile==0.12.1
+pip install scipy==1.15.2
+pip install soundfile==0.13.1
 pip install tqdm==4.67.1
-pip install "wandb>=0.15.0"  # More flexible version
-pip install "torchmetrics[audio]>=1.0.0"  # More flexible version
-pip install "ncps>=0.0.7"  # More flexible version
+pip install wandb==0.19.11
+pip install "torchmetrics[audio]~=1.7.1"
+pip install ncps~=1.0.1
 pip install thop==0.1.1.post2209072238
+pip install pandas>=1.5.0
+pip install tabulate>=0.9.0
+pip install hydra-submitit-launcher
 
 # Create necessary directories
 mkdir -p datasets artifacts outputs wandb logs
@@ -83,6 +102,7 @@ module purge
 module load Python/3.11.3-GCCcore-12.3.0
 module load CUDA/12.1.1
 module load cuDNN/8.9.2.26-CUDA-12.1.1
+module load libsndfile/1.0.31-GCCcore-12.3.0
 
 source $VENV_DIR/bin/activate
 
@@ -99,6 +119,8 @@ echo "⚠️  Important Notes:"
 echo "- Mamba-SSM requires Python 3.11+ and CUDA to be properly loaded"
 echo "- If mamba installation failed, you can still use TCN, Transformer, and Liquid models"
 echo "- Check available CUDA versions with: module avail CUDA"
+echo "- Check available libsndfile versions with: module avail libsndfile"
+echo "- All package versions match requirements.txt exactly"
 echo ""
 echo "To activate the environment in future sessions, run:"
 echo "  source $PROJECT_DIR/activate.sh"
