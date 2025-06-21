@@ -8,7 +8,7 @@ defaults:
 
   - override /model_arch/separator: ghost
 
-name: ${name}-mix-offline
+name: ${model_arch.name}-mix-offline
 group: 0-baselines
 
 # Adjustments
