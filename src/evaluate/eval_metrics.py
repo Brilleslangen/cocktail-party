@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 try :
     from binaqual import calculate_binaqual
 except ImportError:
-    raise ImportError("Please install the 'binaqual' package to use BINAQUAL metrics in full evaluation..")
+    print("binaqual package not found, BINAQUAL metrics will not be available.")
 
 from src.evaluate.train_metrics import energy_weighted_si_sdr_i
 
