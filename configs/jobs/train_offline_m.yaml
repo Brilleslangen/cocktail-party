@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - _self_
+  - /runs/baselines: oracle_mix
+
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      runs/offline: m-tcn, m-transformer, m-mamba, m-liquid
