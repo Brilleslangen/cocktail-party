@@ -2,7 +2,7 @@
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
 
 partition: GPUQ
-account: ${private.USER_ACCOUNT, ???}   # Make a config directory private with file env.yaml and set USER_ACCOUNT there
+account: ${private.USER_ACCOUNT}   # Make a config directory private with file env.yaml and set USER_ACCOUNT there
 nodes: 1
 gres: gpu:3
 constraint: "v100|a100"
