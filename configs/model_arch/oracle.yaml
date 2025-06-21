@@ -2,7 +2,7 @@ _target_: "src.models.oracle.Oracle"
 
 _recursive_: false
 sample_rate: 16000
-stream_context_size_ms: 32.0
+stream_context_size_ms: 4.0
 stream_chunk_size_ms: 4.0
 
 use_targets_as_input: true

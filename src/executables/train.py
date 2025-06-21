@@ -151,11 +151,8 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
 
             B = ests.size(0)
 
-            # Compute mask for valid frames
-            mask = compute_mask(lengths, ests.size(-1), ests.device)
-
             # Compute energy-weighted metrics
-            metrics = compute_validation_metrics(ests, mix, refs, mask)
+            metrics = compute_validation_metrics(ests, mix, refs)
 
             # Accumulate metrics
             totals["loss"] += loss.item() * B
