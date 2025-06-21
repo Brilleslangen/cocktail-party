@@ -11,7 +11,6 @@ module purge
 module load Python/3.11.3-GCCcore-12.3.0  # Required for mamba-ssm
 module load CUDA/12.1.1  # or CUDA/12.6.0 if available - check with 'module avail CUDA'
 module load cuDNN/8.9.2.26-CUDA-12.1.1  # For deep learning
-module load libsndfile/1.0.31-GCCcore-12.3.0  # For soundfile
 
 # Determine repository root (directory one level up from this script)
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
