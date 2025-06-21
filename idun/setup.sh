@@ -49,7 +49,7 @@ pip install --upgrade pip wheel setuptools
 # Install PyTorch with CUDA support (adjust CUDA version as needed)
 echo "🔥 Installing PyTorch with CUDA support..."
 # For CUDA 12.1
-pip install "torch~=2.7.1" "torchvision" "torchaudio~=2.7.0" --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 # If using CUDA 12.6, you might need to use a different index URL or check PyTorch compatibility
 
 ## Install binaqual-pkg
