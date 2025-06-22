@@ -37,7 +37,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
     mse_loss_fn = MaskedMSELoss()
 
     # Setup mixed precision
-    scaler = torch.cuda.amp.GradScaler() if (use_amp and device.type == "cuda") else None
+    scaler = torch.amp.GradScaler('cuda') if (use_amp and device.type == "cuda") else None
     use_targets_as_input = getattr(model, "use_targets_as_input", False)
 
     pbar = tqdm(loader, total=len(loader), desc="Train", leave=False)
