@@ -119,10 +119,11 @@ class TasNet(nn.Module):
         """
         eps = 1e-8  # small value to prevent log(0)
 
-        with torch.cuda.amp.autocast(enabled=False):
-            # 1) STFT
+        # Disable AMP for STFT and cast inputs to float32 as bfloat16 STFT is
+        # not well-supported on CUDA.
+        with torch.amp.autocast("cuda", enabled=False):
             stft_left = torch.stft(
-                left_waveform,
+                left_waveform.float(),
                 n_fft=self.analysis_window,
                 hop_length=self.analysis_hop,
                 win_length=self.analysis_window,
@@ -130,7 +131,7 @@ class TasNet(nn.Module):
                 return_complex=True
             )  # [B, F, T]
             stft_right = torch.stft(
-                right_waveform,
+                right_waveform.float(),
                 n_fft=self.analysis_window,
                 hop_length=self.analysis_hop,
                 win_length=self.analysis_window,

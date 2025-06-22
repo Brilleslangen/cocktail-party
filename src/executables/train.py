@@ -51,6 +51,9 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
             assert torch.allclose(model_input, refs, atol=1e-6), ("Mix and references must be the same when using "
                                                                   " targets as input.")
 
+        if model.separator.stateful:
+            model.reset_state()
+
         # Forward pass with mixed precision
         if use_amp and device.type == "cuda":
             with torch.amp.autocast('cuda', dtype=amp_dtype):
@@ -92,9 +95,6 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
         total_mse_loss += mse_loss_val
 
         pbar.set_postfix(loss=f"{loss_val:.4f}", mse=f"{mse_loss_val:.4f}")
-
-        if model.separator.stateful:
-            model.reset_state()
 
     return total_loss / len(loader), total_mse_loss / len(loader)
 
