@@ -44,7 +44,7 @@ class TasNet(nn.Module):
         # -------------------------------------------------------------------
         self.analysis_window = ms_to_samples(window_length_ms, sample_rate)  # STFT window length (samples)
         self.analysis_hop = ms_to_samples(stride_ms, sample_rate)  # STFT hop length (samples)
-        self.register_buffer("stft_window_fn", torch.hann_window(self.analysis_window).float())
+        self.register_buffer("stft_window_fn", torch.hann_window(self.analysis_window))
 
         # -------------------------------------------------------------------
         # Compute separator's channel dimensions
