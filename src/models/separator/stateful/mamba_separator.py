@@ -58,7 +58,6 @@ class MambaSeparator(BaseSeparator):
             headdim=self.headdim,
             dropout_val=self.dropout_val,
             causal=self.causal,
-            batch_size=self.batch_size,
             chunk_len=self.frames_per_output,
             layer_idx=block_idx
         )
