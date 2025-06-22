@@ -80,7 +80,7 @@ class MambaBlock(ResidualBlock):
 
     def _build_core_layer(self) -> nn.Module:
         class MambaWrapper(nn.Module):
-            def __init__(self, d_model, d_state, d_conv, headdim, expand):
+            def __init__(self, d_model, d_state, d_conv, headdim, expand, layer_idx):
                 super().__init__()
                 self.mamba = Mamba2(
                     d_model=d_model,
@@ -88,7 +88,7 @@ class MambaBlock(ResidualBlock):
                     d_conv=d_conv,
                     headdim=headdim,
                     expand=expand,
-                    layer_idx=self.layer_idx,
+                    layer_idx=layer_idx,
                 )
 
             def build_fresh_state(self, batch_size: int, chunk_len: int, layer_idx: int):
