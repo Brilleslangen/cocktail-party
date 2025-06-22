@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - m-liquid
+  - m-mamba
   - _self_
 
 name: s-${model_arch.name}-offline

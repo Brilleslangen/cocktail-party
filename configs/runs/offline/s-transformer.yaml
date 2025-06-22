@@ -1,21 +1,11 @@
 # @package _global_
 defaults:
-  - /model_arch: tasnet            # Architecture selection
-  - /dataset: static_big         # Dataset selection
-  - /training: default
-  - /wandb: default
-
-  - override /model_arch/separator: transformer
+  - m-transformer
   - _self_
 
-
-name: m-${model_arch.name}-offline
-group: 1-offline
+name: s-${model_arch.name}-offline
 
 # Adjustments
 model_arch:
-  use_spatial_features: true
-  streaming_mode: false
-
   separator:
     scaler: 0.45
