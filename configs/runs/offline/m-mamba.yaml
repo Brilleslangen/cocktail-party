@@ -2,7 +2,7 @@
 defaults:
   - _self_
   - /model_arch: tasnet            # Architecture selection
-  - /dataset: static_small         # Dataset selection
+  - /dataset: static_big         # Dataset selection
   - /training: default
   - /wandb: default
 
