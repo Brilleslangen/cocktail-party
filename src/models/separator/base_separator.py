@@ -106,20 +106,22 @@ class BaseSeparator(SubModule):
 
         return x.transpose(1, 2)  # [B, output_dim, T_out]
 
-    def reset_state(self):
+    def reset_state(self, batch_size: int, chunk_len: int):
         """Reset all hidden states."""
+        if hasattr(self.blocks[0], 'build_fresh_state'):
+            self.hidden_states = [self.blocks[i].build_fresh_state(batch_size, chunk_len, i) for i in range(self.n_blocks)]
         self.hidden_states = [None] * self.n_blocks
 
     def detach_state(self):
         """Detach hidden states to truncate BPTT."""
         for i in range(self.n_blocks):
-            if self.hidden_states[i] is not None:
-                if isinstance(self.hidden_states[i], torch.Tensor):
-                    self.hidden_states[i] = self.hidden_states[i].detach()
+            state = self.hidden_states[i]
+            if state is not None:
+                if isinstance(state, torch.Tensor):
+                    self.hidden_states[i] = state.detach()
                 else:
-                    # Mamba2 might return tuple of states
-                    self.hidden_states[i] = tuple(h.detach() if h is not None else None
-                                                  for h in self.hidden_states[i])
+                    old_tuple = state.key_value_memory_dict[i]
+                    state.key_value_memory_dict[i] = tuple(h.detach() if h is not None else None for h in old_tuple)
 
     def get_input_dim(self) -> int:
         return self.input_dim

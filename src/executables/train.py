@@ -45,14 +45,15 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
     for i, (mix, refs, lengths) in enumerate(pbar):
         mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
         model_input = refs if use_targets_as_input else mix
+        B, C, T = mix.shape
 
         if use_targets_as_input:
             # Assert that targets and references are the same
             assert torch.allclose(model_input, refs, atol=1e-6), ("Mix and references must be the same when using "
                                                                   " targets as input.")
 
-        if model.separator.stateful:
-            model.reset_state()
+        if hasattr(model, "reset_state"):
+            model.reset_state(batch_size=B, chunk_len=T)
 
         # Forward pass with mixed precision
         if use_amp and device.type == "cuda":
@@ -120,6 +121,7 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
         for mix, refs, lengths in tqdm(loader, desc="Validate", leave=False):
             mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
             model_input = refs if model.use_targets_as_input else mix
+            B, C, T = mix.shape
 
             if model.use_targets_as_input:
                 # Assert that targets and references are the same
@@ -128,9 +130,7 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
 
             # Reset state for stateful models
             if hasattr(model, "reset_state"):
-                model.reset_state()
-            elif hasattr(model, "separator") and hasattr(model.separator, "reset_state"):
-                model.separator.reset_state()
+                model.reset_state(batch_size=B, chunk_len=T)
 
             # Forward pass with mixed precision
             if use_amp and device.type == "cuda":

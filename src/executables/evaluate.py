@@ -50,12 +50,11 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
         for mix, refs, lengths in tqdm(test_loader, desc="Evaluating", leave=False):
             mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
             model_input = refs if use_targets_as_input else mix
+            B, C, T = mix.shape
 
             # Reset state for stateful models
             if hasattr(model, "reset_state"):
-                model.reset_state()
-            elif hasattr(model, "separator") and hasattr(model.separator, "reset_state"):
-                model.separator.reset_state()
+                model.reset_state(B, T)
 
             # Forward pass with mixed precision
             if use_amp and device.type == "cuda":

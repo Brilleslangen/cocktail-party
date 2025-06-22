@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import torch.nn as nn
 from mamba_ssm import Mamba2
 from src.models.separator.base_separator import BaseSeparator, ResidualBlock
@@ -56,6 +58,9 @@ class MambaSeparator(BaseSeparator):
             headdim=self.headdim,
             dropout_val=self.dropout_val,
             causal=self.causal,
+            batch_size=self.batch_size,
+            chunk_len=self.frames_per_output,
+            layer_idx=block_idx
         )
 
 
@@ -63,11 +68,15 @@ class MambaBlock(ResidualBlock):
     """Single Mamba-2 block used inside the separator."""
 
     def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int, headdim: int,
-                 d_ff: int, dropout_val: float, causal: bool, **kwargs):
+                 d_ff: int, dropout_val: float, causal: bool, batch_size: int, chunk_len: int, layer_idx: int,
+                 **kwargs):
         self.d_state = d_state
         self.headdim = headdim
         self.d_conv = d_conv
         self.expand = expand
+        self.batch_size = batch_size
+        self.chunk_len = chunk_len
+        self.layer_idx = layer_idx
         super().__init__(d_model, d_ff, dropout_val, causal,
                          post_core_gelu=False, stateful=True)
 
@@ -81,12 +90,21 @@ class MambaBlock(ResidualBlock):
                     d_conv=d_conv,
                     headdim=headdim,
                     expand=expand,
+                    layer_idx=self.layer_idx,
                 )
+
+            def build_fresh_state(self, batch_size: int, chunk_len: int, layer_idx: int):
+                conv_state, ssm_state = self.mamba.allocate_inference_cache(batch_size, chunk_len)
+                inference_params = SimpleNamespace(
+                    key_value_memory_dict={layer_idx: (conv_state, ssm_state)},
+                    seqlen_offset=0
+                )
+                return inference_params
 
             def forward(self, x, state=None):
                 if state is not None:
-                    return self.mamba(x, initial_states=state)
-                out, hidden_state = self.mamba(x)
-                return out, hidden_state
+                    return self.mamba(x, inference_params=state), state
+                out = self.mamba(x)
+                return out, None
 
         return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand)
