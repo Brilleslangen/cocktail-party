@@ -5,6 +5,11 @@ defaults:
   - /dataset: static_small         # Dataset selection
   - /training: default
   - /wandb: default
-  - /inference: default
 
-name: ${model_arch.separator.name}-${model_arch.name}-offline
+name: $m-{model_arch.name}-offline
+group: 1-offline
+
+# Adjustments
+model_arch:
+  use_spatial_features: true
+  streaming_mode: false

@@ -59,7 +59,7 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
             # Forward pass with mixed precision
             if use_amp and device.type == "cuda":
-                with torch.cuda.amp.autocast(dtype=amp_dtype):
+                with torch.amp.autocast('cuda', dtype=amp_dtype):
                     if streaming_mode:
                         ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
                         mix = mix[..., streamer.pad_warmup:]

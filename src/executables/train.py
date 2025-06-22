@@ -53,7 +53,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
 
         # Forward pass with mixed precision
         if use_amp and device.type == "cuda":
-            with torch.cuda.amp.autocast(dtype=amp_dtype):
+            with torch.amp.autocast('cuda', dtype=amp_dtype):
                 if streaming_mode:
                     ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
                 else:
@@ -134,7 +134,7 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
 
             # Forward pass with mixed precision
             if use_amp and device.type == "cuda":
-                with torch.cuda.amp.autocast(dtype=amp_dtype):
+                with torch.amp.autocast('cuda', dtype=amp_dtype):
                     if streaming_mode:
                         ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
                         mix = mix[..., streamer.pad_warmup:]
