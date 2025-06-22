@@ -86,7 +86,7 @@ class MambaBlock(ResidualBlock):
             def forward(self, x, state=None):
                 if state is not None:
                     return self.mamba(x, initial_states=state)
-                out = self.mamba(x)
-                return out, getattr(self.mamba, "final_states", None)
+                out, hidden_state = self.mamba(x)
+                return out, hidden_state
 
         return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand)
