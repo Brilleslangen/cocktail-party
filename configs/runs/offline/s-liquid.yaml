@@ -8,4 +8,4 @@ name: s-${model_arch.name}-offline
 # Adjustments
 model_arch:
   separator:
-    scaler: 0.47
+    scaler: 0.46

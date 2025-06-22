@@ -44,7 +44,7 @@ class TasNet(nn.Module):
         # -------------------------------------------------------------------
         self.analysis_window = ms_to_samples(window_length_ms, sample_rate)  # STFT window length (samples)
         self.analysis_hop = ms_to_samples(stride_ms, sample_rate)  # STFT hop length (samples)
-        self.register_buffer("stft_window_fn", torch.hann_window(self.analysis_window))
+        self.register_buffer("stft_window_fn", torch.hann_window(self.analysis_window).float())
 
         # -------------------------------------------------------------------
         # Compute separator's channel dimensions
@@ -117,21 +117,29 @@ class TasNet(nn.Module):
             spatial_feats (torch.Tensor): [batch, 3*F, T_frames]
                 concatenated ILD, cos(IPD), and sin(IPD) features.
         """
-        eps = 1e-8  # small value to prevent log(0)
+        eps = 1e-4  # Small value to avoid log(0) issues
 
-        # Disable AMP for STFT and cast inputs to float32 as bfloat16 STFT is
-        # not well-supported on CUDA.
+        # Store original dtype and device
+        orig_dtype = left_waveform.dtype
+
+        # Disable AMP for entire spatial feature computation due to cuda issues with stft etc
         with torch.amp.autocast("cuda", enabled=False):
+            # Explicitly convert to float32
+            left_waveform = left_waveform.float()
+            right_waveform = right_waveform.float()
+
+            # Compute STFT
             stft_left = torch.stft(
-                left_waveform.float(),
+                left_waveform,
                 n_fft=self.analysis_window,
                 hop_length=self.analysis_hop,
                 win_length=self.analysis_window,
                 window=self.stft_window_fn,
                 return_complex=True
             )  # [B, F, T]
+
             stft_right = torch.stft(
-                right_waveform.float(),
+                right_waveform,
                 n_fft=self.analysis_window,
                 hop_length=self.analysis_hop,
                 win_length=self.analysis_window,
@@ -139,26 +147,43 @@ class TasNet(nn.Module):
                 return_complex=True
             )  # [B, F, T]
 
-        # Magnitude & Phase
-        mag_left = stft_left.abs() + eps
-        mag_right = stft_right.abs() + eps
-        phase_left = torch.angle(stft_left)
-        phase_right = torch.angle(stft_right)
+            # Magnitude & Phase
+            mag_left = stft_left.abs().clamp(min=eps)  # Clamp to avoid zero
+            mag_right = stft_right.abs().clamp(min=eps)
+            phase_left = torch.angle(stft_left)
+            phase_right = torch.angle(stft_right)
 
-        # ILD (Interaural Level Difference)
-        ild = 10.0 * (mag_left.log10() - mag_right.log10())  # [B, F, T]
+            # ILD (Interaural Level Difference) - more stable computation
+            ild = 10.0 * (torch.log10(mag_left) - torch.log10(mag_right))
+            ild = torch.clamp(ild, min=-60.0, max=60.0)
 
-        # IPD (Interaural Phase Difference)
-        ipd = phase_left - phase_right
-        cos_ipd = torch.cos(ipd)
-        sin_ipd = torch.sin(ipd)
+            # IPD (Interaural Phase Difference)
+            ipd = phase_left - phase_right
+            ipd = torch.remainder(ipd + torch.pi, 2 * torch.pi) - torch.pi
+            cos_ipd = torch.cos(ipd)
+            sin_ipd = torch.sin(ipd)
 
-        # Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
-        ild_t = ild.permute(0, 2, 1)
-        cos_t = cos_ipd.permute(0, 2, 1)
-        sin_t = sin_ipd.permute(0, 2, 1)
-        stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)
-        return stacked.permute(0, 2, 1)  # [B, 3F, T]
+            # Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
+            ild_t = ild.permute(0, 2, 1)
+            cos_t = cos_ipd.permute(0, 2, 1)
+            sin_t = sin_ipd.permute(0, 2, 1)
+            stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)
+            spatial_features = stacked.permute(0, 2, 1)  # [B, 3F, T]
+
+            # Check for NaN and log if found
+            if torch.isnan(spatial_features).any():
+                print(f"WARNING: NaN detected in spatial features!")
+                print(f"  mag_left range: [{mag_left.min():.6f}, {mag_left.max():.6f}]")
+                print(f"  mag_right range: [{mag_right.min():.6f}, {mag_right.max():.6f}]")
+                print(f"  ild range: [{ild.min():.2f}, {ild.max():.2f}]")
+                raise ValueError("NaN detected in spatial features!")
+
+            # Convert back to original dtype for consistency with the rest of the model
+            # Only do this if the original dtype was float16/bfloat16
+            if orig_dtype in [torch.float16, torch.bfloat16]:
+                spatial_features = spatial_features.to(orig_dtype)
+
+        return spatial_features
 
     def forward(self, mixture: torch.Tensor) -> torch.Tensor:
         """
