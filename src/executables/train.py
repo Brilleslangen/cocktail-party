@@ -56,6 +56,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
             model.reset_state(batch_size=B, chunk_len=T)
 
         # Forward pass with mixed precision
+        use_amp = False
         if use_amp and device.type == "cuda":
             with torch.amp.autocast('cuda', dtype=amp_dtype):
                 if streaming_mode:
