@@ -9,6 +9,3 @@ hydra:
   sweeper:
     params:
       runs/offline: s-tcn, s-transformer, s-mamba, s-liquid
-
-model_arch:
-  use_spatial_features: false

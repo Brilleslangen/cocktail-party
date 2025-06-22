@@ -119,23 +119,24 @@ class TasNet(nn.Module):
         """
         eps = 1e-8  # small value to prevent log(0)
 
-        # 1) STFT
-        stft_left = torch.stft(
-            left_waveform,
-            n_fft=self.analysis_window,
-            hop_length=self.analysis_hop,
-            win_length=self.analysis_window,
-            window=self.stft_window_fn,
-            return_complex=True
-        )  # [B, F, T]
-        stft_right = torch.stft(
-            right_waveform,
-            n_fft=self.analysis_window,
-            hop_length=self.analysis_hop,
-            win_length=self.analysis_window,
-            window=self.stft_window_fn,
-            return_complex=True
-        )  # [B, F, T]
+        with torch.cuda.amp.autocast(enabled=False):
+            # 1) STFT
+            stft_left = torch.stft(
+                left_waveform,
+                n_fft=self.analysis_window,
+                hop_length=self.analysis_hop,
+                win_length=self.analysis_window,
+                window=self.stft_window_fn,
+                return_complex=True
+            )  # [B, F, T]
+            stft_right = torch.stft(
+                right_waveform,
+                n_fft=self.analysis_window,
+                hop_length=self.analysis_hop,
+                win_length=self.analysis_window,
+                window=self.stft_window_fn,
+                return_complex=True
+            )  # [B, F, T]
 
         # Magnitude & Phase
         mag_left = stft_left.abs() + eps
