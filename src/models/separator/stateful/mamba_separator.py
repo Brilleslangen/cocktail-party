@@ -68,13 +68,12 @@ class MambaBlock(ResidualBlock):
     """Single Mamba-2 block used inside the separator."""
 
     def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int, headdim: int,
-                 d_ff: int, dropout_val: float, causal: bool, batch_size: int, chunk_len: int, layer_idx: int,
+                 d_ff: int, dropout_val: float, causal: bool, chunk_len: int, layer_idx: int,
                  **kwargs):
         self.d_state = d_state
         self.headdim = headdim
         self.d_conv = d_conv
         self.expand = expand
-        self.batch_size = batch_size
         self.chunk_len = chunk_len
         self.layer_idx = layer_idx
         super().__init__(d_model, d_ff, dropout_val, causal,
