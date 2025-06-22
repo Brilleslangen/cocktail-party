@@ -9,6 +9,13 @@ from src.helpers import ms_to_samples
 from src.models.submodules import SubModule
 
 
+def check_nan(x, name):
+    if torch.isnan(x).any():
+        print(f"NaN detected in {name}!")
+        print(f"Min: {x.min().item()}  Max: {x.max().item()}")
+        raise RuntimeError(f"NaN detected in {name}")
+
+
 class TasNet(nn.Module):
     """
     Binaural Conv-TasNet model with spatial feature fusion.
@@ -128,6 +135,8 @@ class TasNet(nn.Module):
         left_waveform = left_waveform.float()
         right_waveform = right_waveform.float()
 
+        check_nan(left_waveform, "left_waveform (after .float())")
+
         if (left_waveform.abs().max() < 1e-6) or (right_waveform.abs().max() < 1e-6):
             print("Waveform is (near) silent! Skipping or warning.")
 
@@ -149,23 +158,28 @@ class TasNet(nn.Module):
             window=self.stft_window_fn,
             return_complex=True
         )  # [B, F, T]
+        check_nan(stft_left, "stft_left")
+        check_nan(stft_left, "stft_left")
 
         # Magnitude & Phase
         mag_left = stft_left.abs().clamp(min=eps)  # Clamp to avoid zero
         mag_right = stft_right.abs().clamp(min=eps)
         phase_left = torch.angle(stft_left)
         phase_right = torch.angle(stft_right)
+        check_nan(mag_left, "mag_left")
 
         # ILD (Interaural Level Difference) - more stable computation
         ild = 10.0 * (torch.log10(mag_left) - torch.log10(mag_right))
         ild = torch.clamp(ild, min=-60.0, max=60.0)
         ild = torch.nan_to_num(ild, nan=0.0, posinf=60.0, neginf=-60.0)
+        check_nan(ild, "ild")
 
         # IPD (Interaural Phase Difference)
         ipd = phase_left - phase_right
         ipd = torch.remainder(ipd + torch.pi, 2 * torch.pi) - torch.pi
         cos_ipd = torch.cos(ipd)
         sin_ipd = torch.sin(ipd)
+        check_nan(ipd, "ipd")
 
         # Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
         ild_t = ild.permute(0, 2, 1)
@@ -186,6 +200,8 @@ class TasNet(nn.Module):
         # Only do this if the original dtype was float16/bfloat16
         if orig_dtype in [torch.float16, torch.bfloat16]:
             spatial_features = spatial_features.to(orig_dtype)
+
+        check_nan(spatial_features, "spatial_features (final)")
 
         return spatial_features
 
