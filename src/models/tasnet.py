@@ -119,18 +119,6 @@ class TasNet(nn.Module):
         """
         eps = 1e-4  # Small value to avoid log(0) issues
 
-        # Store original dtype and device
-        orig_dtype = left_waveform.dtype
-
-        # Disable AMP for entire spatial feature computation due to cuda issues with stft etc
-        #with torch.amp.autocast("cuda", enabled=False):
-        # Explicitly convert to float32
-        left_waveform = left_waveform.float()
-        right_waveform = right_waveform.float()
-
-        if (left_waveform.abs().max() < 1e-6) or (right_waveform.abs().max() < 1e-6):
-            print("Waveform is (near) silent! Skipping or warning.")
-
         # Compute STFT
         stft_left = torch.stft(
             left_waveform,
@@ -179,19 +167,6 @@ class TasNet(nn.Module):
             mean = spatial_features.mean(dim=(1, 2), keepdim=True)
             std = spatial_features.std(dim=(1, 2), keepdim=True).clamp(min=eps)
             spatial_features = (spatial_features - mean) / std
-
-        # Check for NaN and log if found
-        if torch.isnan(spatial_features).any():
-            print(f"WARNING: NaN detected in spatial features!")
-            print(f"  mag_left range: [{mag_left.min():.6f}, {mag_left.max():.6f}]")
-            print(f"  mag_right range: [{mag_right.min():.6f}, {mag_right.max():.6f}]")
-            print(f"  ild range: [{ild.min():.2f}, {ild.max():.2f}]")
-            raise ValueError("NaN detected in spatial features!")
-
-        # Convert back to original dtype for consistency with the rest of the model
-        # Only do this if the original dtype was float16/bfloat16
-        if orig_dtype in [torch.float16, torch.bfloat16]:
-            spatial_features = spatial_features.to(orig_dtype)
 
         return spatial_features
 
