@@ -128,6 +128,9 @@ class TasNet(nn.Module):
             left_waveform = left_waveform.float()
             right_waveform = right_waveform.float()
 
+            if (left_waveform.abs().max() < 1e-6) or (right_waveform.abs().max() < 1e-6):
+                print("Waveform is (near) silent! Skipping or warning.")
+
             # Compute STFT
             stft_left = torch.stft(
                 left_waveform,
@@ -156,6 +159,7 @@ class TasNet(nn.Module):
             # ILD (Interaural Level Difference) - more stable computation
             ild = 10.0 * (torch.log10(mag_left) - torch.log10(mag_right))
             ild = torch.clamp(ild, min=-60.0, max=60.0)
+            ild = torch.nan_to_num(ild, nan=0.0, posinf=60.0, neginf=-60.0)
 
             # IPD (Interaural Phase Difference)
             ipd = phase_left - phase_right
