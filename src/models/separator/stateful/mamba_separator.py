@@ -105,4 +105,4 @@ class MambaBlock(ResidualBlock):
                 out = self.mamba(x)
                 return out, None
 
-        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand)
+        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand, self.layer_idx)
