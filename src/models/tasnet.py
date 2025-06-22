@@ -162,11 +162,10 @@ class TasNet(nn.Module):
         stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)
         spatial_features = stacked.permute(0, 2, 1)  # [B, 3F, T]
 
-        if self.training:
-            # Compute statistics for normalization
-            mean = spatial_features.mean(dim=(1, 2), keepdim=True)
-            std = spatial_features.std(dim=(1, 2), keepdim=True).clamp(min=eps)
-            spatial_features = (spatial_features - mean) / std
+        # Compute statistics for normalization
+        mean = spatial_features.mean(dim=(1, 2), keepdim=True)
+        std = spatial_features.std(dim=(1, 2), keepdim=True).clamp(min=eps)
+        spatial_features = (spatial_features - mean) / std
 
         return spatial_features
 
