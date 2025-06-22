@@ -6,7 +6,7 @@ defaults:
   - /training: default
   - /wandb: default
 
-name: $m-{model_arch.name}-offline
+name: m-${model_arch.name}-offline
 group: 1-offline
 
 # Adjustments
