@@ -68,7 +68,8 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 mse_loss = mse_loss_fn(ests, refs, lengths)
 
             # Backward with gradient scaling
-            scaler.scale(loss).backward()
+            with torch.autograd.detect_anomaly():
+                scaler.scale(loss).backward()
 
             # Unscale before clipping
             scaler.unscale_(optimizer)
@@ -87,8 +88,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
 
             loss = loss_fn(ests, refs, lengths)
             mse_loss = mse_loss_fn(ests, refs, lengths)
-            with torch.autograd.detect_anomaly():
-                loss.backward()
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             optimizer.zero_grad()
