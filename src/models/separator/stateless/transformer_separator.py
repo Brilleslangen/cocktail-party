@@ -184,18 +184,3 @@ def _check_flash_attention():
         else:
             print(f"⚠ FlashAttention-2 not available on {torch.cuda.get_device_name()} "
                   f"(requires compute capability 8.0+, got {device_capability[0]}.{device_capability[1]})")
-
-    # Verify scaled_dot_product_attention is available
-    if hasattr(F, 'scaled_dot_product_attention'):
-        # Check which backends are available
-        from torch.backends.cuda import sdp_kernel
-        if torch.cuda.is_available():
-            with sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False) as context:
-                try:
-                    # Test if flash attention can be used
-                    test_q = torch.randn(1, 8, 16, 64, device='cuda', dtype=torch.float16)
-                    test_k = test_v = test_q
-                    _ = F.scaled_dot_product_attention(test_q, test_k, test_v)
-                    print("✓ FlashAttention-2 kernel confirmed available")
-                except:
-                    print("⚠ FlashAttention-2 kernel not available, will use memory-efficient attention")

@@ -167,6 +167,8 @@ class TasNet(nn.Module):
         std = spatial_features.std(dim=(1, 2), keepdim=True).clamp(min=eps)
         spatial_features = (spatial_features - mean) / std
 
+        spatial_features = torch.clamp(spatial_features, min=-8.0, max=8.0)  # Training stability
+
         return spatial_features
 
     def forward(self, mixture: torch.Tensor) -> torch.Tensor:
