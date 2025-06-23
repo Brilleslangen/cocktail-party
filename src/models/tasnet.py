@@ -145,6 +145,12 @@ class TasNet(nn.Module):
         phase_right = torch.angle(stft_right)
 
         # ILD (Interaural Level Difference) - more stable computation
+        if torch.any(mag_left <= 0):
+            print("Non-positive mag_left before log10!", mag_left.min().item())
+            mag_left = mag_left.clamp(min=eps)
+        if torch.any(mag_right <= 0):
+            print("Non-positive mag_right before log10!", mag_right.min().item())
+            mag_right = mag_right.clamp(min=eps)
         ild = 10.0 * (torch.log10(mag_left) - torch.log10(mag_right))
         ild = torch.clamp(ild, min=-60.0, max=60.0)
         ild = torch.nan_to_num(ild, nan=0.0, posinf=60.0, neginf=-60.0)
@@ -165,7 +171,7 @@ class TasNet(nn.Module):
         # Compute statistics for normalization
         mean = spatial_features.mean(dim=(1, 2), keepdim=True)
         std = spatial_features.std(dim=(1, 2), keepdim=True).clamp(min=eps)
-        spatial_features = (spatial_features - mean) / std
+        spatial_features = (spatial_features - mean) / std + 1e-8  # Normalize to zero mean, unit variance
 
         spatial_features = torch.clamp(spatial_features, min=-8.0, max=8.0)  # Training stability
 
