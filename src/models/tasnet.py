@@ -329,6 +329,7 @@ class RobustSpatialFeatureExtractor(nn.Module):
         # Compute statistics with higher precision
         mean = x.mean(dim=dim, keepdim=True)
         var = x.var(dim=dim, keepdim=True, unbiased=False)
+        var = torch.clamp(var, min=0.0)
 
         # Stable normalization with adaptive epsilon based on variance magnitude
         adaptive_eps = self.eps + 0.1 * torch.sqrt(var.detach())
