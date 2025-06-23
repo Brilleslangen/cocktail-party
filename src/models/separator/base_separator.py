@@ -223,7 +223,8 @@ class CausalLayerNorm(nn.Module):
 
         mean = cumsum / count
         var = cumsum_sq / count - mean.pow(2)
-        x_norm = (x - mean) / (var + self.eps).sqrt()
+        var = torch.clamp(var, min=0.0)
+        x_norm = (x - mean) / torch.sqrt(var + self.eps)
 
         return x_norm * self.weight + self.bias
 

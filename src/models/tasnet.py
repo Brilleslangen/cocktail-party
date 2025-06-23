@@ -384,8 +384,8 @@ class RobustSpatialFeatureExtractor(nn.Module):
         # 3. Compute IPD with stability
         # Use normalized complex division for phase difference
         eps_complex = self.eps + 0j
-        left_norm = stft_left / (stft_left.abs() + self.eps).unsqueeze(-1)
-        right_norm = stft_right / (stft_right.abs() + self.eps).unsqueeze(-1)
+        left_norm = stft_left / (stft_left.abs() + self.eps)
+        right_norm = stft_right / (stft_right.abs() + self.eps)
 
         # Phase difference via complex multiplication with conjugate
         phase_diff = left_norm * right_norm.conj()
