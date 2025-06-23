@@ -107,7 +107,7 @@ class TasNet(nn.Module):
 
     def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
         """
-        Compute interaural spatial cues via STFT.
+        Compute interaural spatial cues via STFT with improved numerical stability.
 
         Args:
             left_waveform (torch.Tensor): [batch, time]
@@ -117,7 +117,7 @@ class TasNet(nn.Module):
             spatial_feats (torch.Tensor): [batch, 3*F, T_frames]
                 concatenated ILD, cos(IPD), and sin(IPD) features.
         """
-        eps = 1e-2  # Small value to avoid log(0) issues
+        eps = 1e-8  # Smaller eps for better precision
 
         # Compute STFT
         stft_left = torch.stft(
@@ -138,50 +138,63 @@ class TasNet(nn.Module):
             return_complex=True
         )  # [B, F, T]
 
-        # Magnitude & Phase
-        mag_left = stft_left.abs().clamp(min=eps).float()  # Clamp to avoid zero
-        mag_right = stft_right.abs().clamp(min=eps).float()
-        phase_left = torch.angle(stft_left).float()
-        phase_right = torch.angle(stft_right).float()
+        # Magnitude & Phase with improved stability
+        mag_left = stft_left.abs() + eps
+        mag_right = stft_right.abs() + eps
 
-        # ILD (Interaural Level Difference) - more stable computation
-        if torch.any(mag_left <= 0):
-            print("Non-positive mag_left before log10!", mag_left.min().item())
-            mag_left = mag_left.clamp(min=eps).float()
-        if torch.any(mag_right <= 0):
-            print("Non-positive mag_right before log10!", mag_right.min().item())
-            mag_right = mag_right.clamp(min=eps).float()
-        ild = 10.0 * (torch.log10(mag_left) - torch.log10(mag_right))
-        ild = torch.nan_to_num(ild, nan=0.0, posinf=60.0, neginf=-60.0)
-        ild = torch.clamp(ild, min=-60.0, max=60.0)
+        # Use log-magnitude for more stable gradients
+        log_mag_left = torch.log(mag_left)
+        log_mag_right = torch.log(mag_right)
 
-        # IPD (Interaural Phase Difference)
-        ipd = phase_left - phase_right
-        if torch.any(mag_right <= 0):
-            print("Non-positive mag_right before log10!", phase_left.min().item(), phase_right.min().item())
-        ipd = torch.remainder(ipd + torch.pi, 2 * torch.pi) - torch.pi
+        # ILD with bounded output
+        ild = 20.0 * (log_mag_left - log_mag_right) / torch.log(torch.tensor(10.0))
+        ild = torch.tanh(ild / 30.0) * 30.0  # Smooth clamping using tanh
+
+        # IPD with improved phase unwrapping
+        phase_left = torch.angle(stft_left)
+        phase_right = torch.angle(stft_right)
+
+        # More stable phase difference calculation
+        complex_ratio = stft_left * stft_right.conj()
+        ipd = torch.angle(complex_ratio)
+
+        # Compute cos and sin of IPD (already bounded [-1, 1])
         cos_ipd = torch.cos(ipd)
         sin_ipd = torch.sin(ipd)
 
-        # Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
-        ild_t = ild.permute(0, 2, 1)
-        cos_t = cos_ipd.permute(0, 2, 1)
-        sin_t = sin_ipd.permute(0, 2, 1)
-        stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)
-        spatial_features = stacked.permute(0, 2, 1)  # [B, 3F, T]
+        # Per-frequency normalization for better stability
+        B, F, T = ild.shape
 
-        # Compute statistics for normalization
-        mean = spatial_features.mean(dim=(1, 2), keepdim=True)
-        std = spatial_features.std(dim=(1, 2), keepdim=True).clamp(min=eps)
-        spatial_features = (spatial_features - mean) / std + 1e-8  # Normalize to zero mean, unit variance
+        # Normalize ILD per frequency bin
+        ild_mean = ild.mean(dim=2, keepdim=True)  # [B, F, 1]
+        ild_std = ild.std(dim=2, keepdim=True).clamp(min=eps)
+        ild_norm = (ild - ild_mean) / (ild_std + eps)
 
-        spatial_features = torch.clamp(spatial_features, min=-8.0, max=8.0)  # Training stability
+        # Scale normalized features to reasonable range
+        ild_norm = torch.tanh(ild_norm / 2.0) * 2.0
 
-        print("ILD min/max:", ild.min().item(), ild.max().item())
-        print("IPD min/max:", ipd.min().item(), ipd.max().item())
-        print("Spatial features min/max:", spatial_features.min().item(), spatial_features.max().item())
-        print("Any NaN?:", torch.isnan(spatial_features).any().item())
-        print("Any Inf?:", torch.isinf(spatial_features).any().item())
+        # Stack features [B, T, 3F]
+        features = torch.stack([
+            ild_norm.permute(0, 2, 1),
+            cos_ipd.permute(0, 2, 1),
+            sin_ipd.permute(0, 2, 1)
+        ], dim=-1).reshape(B, T, 3 * F)
+
+        # Transpose to [B, 3F, T]
+        spatial_features = features.permute(0, 2, 1)
+
+        # Optional: Apply learnable scaling for better gradient flow
+        if not hasattr(self, 'spatial_scale'):
+            self.register_parameter('spatial_scale',
+                                    nn.Parameter(torch.ones(1, 3 * F, 1) * 0.1))
+
+        spatial_features = spatial_features * self.spatial_scale
+
+        # Debug info (only during training)
+        if self.training and torch.rand(1).item() < 0.01:  # Print 1% of the time
+            print(f"ILD range: [{ild_norm.min().item():.3f}, {ild_norm.max().item():.3f}]")
+            print(f"Spatial features range: [{spatial_features.min().item():.3f}, {spatial_features.max().item():.3f}]")
+            print(f"Any NaN: {torch.isnan(spatial_features).any().item()}")
 
         return spatial_features
 
