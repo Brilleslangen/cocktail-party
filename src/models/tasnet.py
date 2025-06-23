@@ -118,8 +118,7 @@ class TasNet(nn.Module):
             # Optional: Initialize spatial gate for stability
             self.spatial_gate = nn.Parameter(torch.ones(1, 3 * F, 1) * 0.5)
 
-    def compute_spatial_features_with_init(self, left_waveform: torch.Tensor,
-                                           right_waveform: torch.Tensor) -> torch.Tensor:
+    def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
         """
         Compute spatial features using pre-initialized parameters.
         Assumes spatial_scale and spatial_gate are already created in __init__.
