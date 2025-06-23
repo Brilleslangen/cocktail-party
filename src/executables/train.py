@@ -97,7 +97,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
         total_loss += loss_val
         total_mse_loss += mse_loss_val
 
-        pbar.set_postfix(avg_loss=f"{(loss_val / (i+1)):.4f}", avg_mse=f"{(mse_loss_val / (i+1)):.4f}")
+        pbar.set_postfix(avg_loss=f"{(total_loss / (i+1)):.4f}", avg_mse=f"{(total_mse_loss / (i+1)):.4f}")
 
     return total_loss / len(loader), total_mse_loss / len(loader)
 
