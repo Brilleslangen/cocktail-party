@@ -56,7 +56,16 @@ class TasNet(nn.Module):
             sep_input_dim += 3 * F  # [left; right; spatial]
         sep_output_dim = 2 * D  # two masks of size D
 
-        self.initialize_spatial_parameters(F)
+        if self.use_spatial_features:
+            F = self.analysis_window // 2 + 1
+
+            self.spatial_norm = nn.LayerNorm(3 * F)
+            self.spatial_proj = nn.Linear(3 * F, 3 * F, bias=True)
+
+            # Initialize projection conservatively
+            with torch.no_grad():
+                self.spatial_proj.weight.copy_(torch.eye(3 * F) * 0.1)
+                self.spatial_proj.bias.zero_()
 
         # Separator streaming params
         self.output_size = ms_to_samples(stream_chunk_size_ms, sample_rate)  # samples of raw audio
@@ -107,23 +116,12 @@ class TasNet(nn.Module):
         mixture = torch.cat([pad_ctx, mixture, pad_ctx], dim=2)
         return mixture, rest
 
-    def initialize_spatial_parameters(self, F):
+    def compute_spatial_features_smooth(self, left_waveform: torch.Tensor,
+                                        right_waveform: torch.Tensor) -> torch.Tensor:
         """
-        Initialize spatial feature parameters in __init__ to ensure proper device handling.
-        Call this in TasNet.__init__ if you use_spatial_features is True.
+        Compute spatial features with smooth operations and no hard clamping.
         """
-        if self.use_spatial_features:
-            # Initialize spatial scale parameter
-            self.spatial_scale = nn.Parameter(torch.ones(1, 3 * F, 1) * 0.1)
-            # Optional: Initialize spatial gate for stability
-            self.spatial_gate = nn.Parameter(torch.ones(1, 3 * F, 1) * 0.5)
-
-    def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
-        """
-        Compute spatial features using pre-initialized parameters.
-        Assumes spatial_scale and spatial_gate are already created in __init__.
-        """
-        eps = 1e-8
+        eps = 1e-5
 
         # Compute STFT
         stft_left = torch.stft(
@@ -144,43 +142,72 @@ class TasNet(nn.Module):
             return_complex=True
         )
 
-        # Magnitude & Phase
-        mag_left = stft_left.abs() + eps
-        mag_right = stft_right.abs() + eps
+        B, F, T = stft_left.shape
 
-        # Log-magnitude ILD
-        log_mag_left = torch.log(mag_left)
-        log_mag_right = torch.log(mag_right)
-        ild = 20.0 * (log_mag_left - log_mag_right) / torch.log(torch.tensor(10.0, device=left_waveform.device))
-        ild = torch.tanh(ild / 30.0) * 30.0
+        # 1. Use log-sum-exp trick for stable magnitude computation
+        # Instead of mag = sqrt(real^2 + imag^2), use:
+        real_l, imag_l = stft_left.real, stft_left.imag
+        real_r, imag_r = stft_right.real, stft_right.imag
 
-        # IPD via complex ratio
-        complex_ratio = stft_left * stft_right.conj()
-        ipd = torch.angle(complex_ratio)
-        cos_ipd = torch.cos(ipd)
-        sin_ipd = torch.sin(ipd)
+        # Stable magnitude using log-sum-exp
+        log_mag_left = 0.5 * torch.logaddexp(
+            2 * torch.log(real_l.abs() + eps),
+            2 * torch.log(imag_l.abs() + eps)
+        )
+        log_mag_right = 0.5 * torch.logaddexp(
+            2 * torch.log(real_r.abs() + eps),
+            2 * torch.log(imag_r.abs() + eps)
+        )
 
-        # Per-frequency normalization
-        B, F, T = ild.shape
+        # 2. ILD using tanh for smooth bounding (no hard clamp)
+        log_diff = log_mag_left - log_mag_right
+        ild = torch.tanh(log_diff / 10.0)  # Smooth mapping to [-1, 1]
 
-        # Normalize ILD
-        ild_mean = ild.mean(dim=2, keepdim=True)
-        ild_std = ild.std(dim=2, keepdim=True).clamp(min=eps)
-        ild_norm = (ild - ild_mean) / (ild_std + eps)
-        ild_norm = torch.tanh(ild_norm / 2.0) * 2.0
+        # 3. IPD using vector normalization (automatically bounded)
+        # Create unit vectors from complex numbers
+        mag_left = torch.exp(log_mag_left)
+        mag_right = torch.exp(log_mag_right)
 
-        # Stack features
-        features = torch.stack([
-            ild_norm.permute(0, 2, 1),
-            cos_ipd.permute(0, 2, 1),
-            sin_ipd.permute(0, 2, 1)
-        ], dim=-1).reshape(B, T, 3 * F)
+        unit_left = stft_left / (mag_left + eps)
+        unit_right = stft_right / (mag_right + eps)
 
-        spatial_features = features.permute(0, 2, 1)  # [B, 3F, T]
+        # Cross-correlation of unit vectors (automatically in [-1, 1])
+        cos_ipd = (unit_left * unit_right.conj()).real
+        sin_ipd = (unit_left * unit_right.conj()).imag
 
-        # Apply pre-initialized scaling and gating
-        spatial_features = spatial_features * self.spatial_scale
-        spatial_features = torch.sigmoid(self.spatial_gate) * spatial_features
+        # 4. Feature normalization using smooth techniques
+        features_list = []
+
+        for feat in [ild, cos_ipd, sin_ipd]:
+            # Use instance normalization (smoother than batch norm)
+            feat_flat = feat.reshape(B, F, -1)
+
+            # Robust statistics using smooth approximations
+            mean = feat_flat.mean(dim=2, keepdim=True)
+
+            # Smooth variance estimation
+            var = (feat_flat - mean).pow(2).mean(dim=2, keepdim=True)
+            std = torch.sqrt(var + eps)
+
+            # Normalize
+            feat_norm = (feat - mean.unsqueeze(2)) / (std.unsqueeze(2) + eps)
+
+            # Use soft bounding with tanh instead of clamp
+            feat_norm = torch.tanh(feat_norm / 3.0) * 3.0
+
+            features_list.append(feat_norm)
+
+        # 5. Combine features
+        spatial_features = torch.cat([
+            f.permute(0, 2, 1) for f in features_list
+        ], dim=2).permute(0, 2, 1)  # [B, 3*F, T]
+
+        # 6. Learnable soft gating (sigmoid for smooth control)
+        if not hasattr(self, 'spatial_gate'):
+            self.spatial_gate = nn.Parameter(torch.zeros(1, 3 * F, 1))
+
+        gate = torch.sigmoid(self.spatial_gate - 2.0)  # Start near 0
+        spatial_features = spatial_features * gate
 
         return spatial_features
 
