@@ -44,7 +44,7 @@ class TasNet(nn.Module):
         # -------------------------------------------------------------------
         self.analysis_window = ms_to_samples(window_length_ms, sample_rate)  # STFT window length (samples)
         self.analysis_hop = ms_to_samples(stride_ms, sample_rate)  # STFT hop length (samples)
-        self.register_buffer("stft_window_fn", torch.hann_window(self.analysis_window))
+        self.register_buffer("stft_window_fn", torch.hann_window(self.analysis_window).float())
 
         # -------------------------------------------------------------------
         # Compute separator's channel dimensions
@@ -139,24 +139,26 @@ class TasNet(nn.Module):
         )  # [B, F, T]
 
         # Magnitude & Phase
-        mag_left = stft_left.abs().clamp(min=eps)  # Clamp to avoid zero
-        mag_right = stft_right.abs().clamp(min=eps)
-        phase_left = torch.angle(stft_left)
-        phase_right = torch.angle(stft_right)
+        mag_left = stft_left.abs().clamp(min=eps).float()  # Clamp to avoid zero
+        mag_right = stft_right.abs().clamp(min=eps).float()
+        phase_left = torch.angle(stft_left).float()
+        phase_right = torch.angle(stft_right).float()
 
         # ILD (Interaural Level Difference) - more stable computation
         if torch.any(mag_left <= 0):
             print("Non-positive mag_left before log10!", mag_left.min().item())
-            mag_left = mag_left.clamp(min=eps)
+            mag_left = mag_left.clamp(min=eps).float()
         if torch.any(mag_right <= 0):
             print("Non-positive mag_right before log10!", mag_right.min().item())
-            mag_right = mag_right.clamp(min=eps)
+            mag_right = mag_right.clamp(min=eps).float()
         ild = 10.0 * (torch.log10(mag_left) - torch.log10(mag_right))
-        ild = torch.clamp(ild, min=-60.0, max=60.0)
         ild = torch.nan_to_num(ild, nan=0.0, posinf=60.0, neginf=-60.0)
+        ild = torch.clamp(ild, min=-60.0, max=60.0)
 
         # IPD (Interaural Phase Difference)
         ipd = phase_left - phase_right
+        if torch.any(mag_right <= 0):
+            print("Non-positive mag_right before log10!", phase_left.min().item(), phase_right.min().item())
         ipd = torch.remainder(ipd + torch.pi, 2 * torch.pi) - torch.pi
         cos_ipd = torch.cos(ipd)
         sin_ipd = torch.sin(ipd)
