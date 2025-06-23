@@ -117,7 +117,7 @@ class TasNet(nn.Module):
             spatial_feats (torch.Tensor): [batch, 3*F, T_frames]
                 concatenated ILD, cos(IPD), and sin(IPD) features.
         """
-        eps = 1e-4  # Small value to avoid log(0) issues
+        eps = 1e-2  # Small value to avoid log(0) issues
 
         # Compute STFT
         stft_left = torch.stft(
