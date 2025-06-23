@@ -177,6 +177,12 @@ class TasNet(nn.Module):
 
         spatial_features = torch.clamp(spatial_features, min=-8.0, max=8.0)  # Training stability
 
+        print("ILD min/max:", ild.min().item(), ild.max().item())
+        print("IPD min/max:", ipd.min().item(), ipd.max().item())
+        print("Spatial features min/max:", spatial_features.min().item(), spatial_features.max().item())
+        print("Any NaN?:", torch.isnan(spatial_features).any().item())
+        print("Any Inf?:", torch.isinf(spatial_features).any().item())
+
         return spatial_features
 
     def forward(self, mixture: torch.Tensor) -> torch.Tensor:
