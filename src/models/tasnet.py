@@ -56,6 +56,8 @@ class TasNet(nn.Module):
             sep_input_dim += 3 * F  # [left; right; spatial]
         sep_output_dim = 2 * D  # two masks of size D
 
+        self.initialize_spatial_parameters(F)
+
         # Separator streaming params
         self.output_size = ms_to_samples(stream_chunk_size_ms, sample_rate)  # samples of raw audio
         self.frames_per_output = math.ceil((self.output_size + 2 * self.decoder.pad - self.decoder.filter_length)
@@ -105,19 +107,24 @@ class TasNet(nn.Module):
         mixture = torch.cat([pad_ctx, mixture, pad_ctx], dim=2)
         return mixture, rest
 
-    def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
+    def initialize_spatial_parameters(self, F):
         """
-        Compute interaural spatial cues via STFT with improved numerical stability.
-
-        Args:
-            left_waveform (torch.Tensor): [batch, time]
-            right_waveform (torch.Tensor): [batch, time]
-
-        Returns:
-            spatial_feats (torch.Tensor): [batch, 3*F, T_frames]
-                concatenated ILD, cos(IPD), and sin(IPD) features.
+        Initialize spatial feature parameters in __init__ to ensure proper device handling.
+        Call this in TasNet.__init__ if you use_spatial_features is True.
         """
-        eps = 1e-8  # Smaller eps for better precision
+        if self.use_spatial_features:
+            # Initialize spatial scale parameter
+            self.spatial_scale = nn.Parameter(torch.ones(1, 3 * F, 1) * 0.1)
+            # Optional: Initialize spatial gate for stability
+            self.spatial_gate = nn.Parameter(torch.ones(1, 3 * F, 1) * 0.5)
+
+    def compute_spatial_features_with_init(self, left_waveform: torch.Tensor,
+                                           right_waveform: torch.Tensor) -> torch.Tensor:
+        """
+        Compute spatial features using pre-initialized parameters.
+        Assumes spatial_scale and spatial_gate are already created in __init__.
+        """
+        eps = 1e-8
 
         # Compute STFT
         stft_left = torch.stft(
@@ -127,7 +134,7 @@ class TasNet(nn.Module):
             win_length=self.analysis_window,
             window=self.stft_window_fn,
             return_complex=True
-        )  # [B, F, T]
+        )
 
         stft_right = torch.stft(
             right_waveform,
@@ -136,65 +143,45 @@ class TasNet(nn.Module):
             win_length=self.analysis_window,
             window=self.stft_window_fn,
             return_complex=True
-        )  # [B, F, T]
+        )
 
-        # Magnitude & Phase with improved stability
+        # Magnitude & Phase
         mag_left = stft_left.abs() + eps
         mag_right = stft_right.abs() + eps
 
-        # Use log-magnitude for more stable gradients
+        # Log-magnitude ILD
         log_mag_left = torch.log(mag_left)
         log_mag_right = torch.log(mag_right)
+        ild = 20.0 * (log_mag_left - log_mag_right) / torch.log(torch.tensor(10.0, device=left_waveform.device))
+        ild = torch.tanh(ild / 30.0) * 30.0
 
-        # ILD with bounded output
-        ild = 20.0 * (log_mag_left - log_mag_right) / torch.log(torch.tensor(10.0))
-        ild = torch.tanh(ild / 30.0) * 30.0  # Smooth clamping using tanh
-
-        # IPD with improved phase unwrapping
-        phase_left = torch.angle(stft_left)
-        phase_right = torch.angle(stft_right)
-
-        # More stable phase difference calculation
+        # IPD via complex ratio
         complex_ratio = stft_left * stft_right.conj()
         ipd = torch.angle(complex_ratio)
-
-        # Compute cos and sin of IPD (already bounded [-1, 1])
         cos_ipd = torch.cos(ipd)
         sin_ipd = torch.sin(ipd)
 
-        # Per-frequency normalization for better stability
+        # Per-frequency normalization
         B, F, T = ild.shape
 
-        # Normalize ILD per frequency bin
-        ild_mean = ild.mean(dim=2, keepdim=True)  # [B, F, 1]
+        # Normalize ILD
+        ild_mean = ild.mean(dim=2, keepdim=True)
         ild_std = ild.std(dim=2, keepdim=True).clamp(min=eps)
         ild_norm = (ild - ild_mean) / (ild_std + eps)
-
-        # Scale normalized features to reasonable range
         ild_norm = torch.tanh(ild_norm / 2.0) * 2.0
 
-        # Stack features [B, T, 3F]
+        # Stack features
         features = torch.stack([
             ild_norm.permute(0, 2, 1),
             cos_ipd.permute(0, 2, 1),
             sin_ipd.permute(0, 2, 1)
         ], dim=-1).reshape(B, T, 3 * F)
 
-        # Transpose to [B, 3F, T]
-        spatial_features = features.permute(0, 2, 1)
+        spatial_features = features.permute(0, 2, 1)  # [B, 3F, T]
 
-        # Optional: Apply learnable scaling for better gradient flow
-        if not hasattr(self, 'spatial_scale'):
-            self.register_parameter('spatial_scale',
-                                    nn.Parameter(torch.ones(1, 3 * F, 1) * 0.1))
-
+        # Apply pre-initialized scaling and gating
         spatial_features = spatial_features * self.spatial_scale
-
-        # Debug info (only during training)
-        if self.training and torch.rand(1).item() < 0.01:  # Print 1% of the time
-            print(f"ILD range: [{ild_norm.min().item():.3f}, {ild_norm.max().item():.3f}]")
-            print(f"Spatial features range: [{spatial_features.min().item():.3f}, {spatial_features.max().item():.3f}]")
-            print(f"Any NaN: {torch.isnan(spatial_features).any().item()}")
+        spatial_features = torch.sigmoid(self.spatial_gate) * spatial_features
 
         return spatial_features
 
