@@ -56,17 +56,6 @@ class TasNet(nn.Module):
             sep_input_dim += 3 * F  # [left; right; spatial]
         sep_output_dim = 2 * D  # two masks of size D
 
-        if self.use_spatial_features:
-            F = self.analysis_window // 2 + 1
-
-            self.spatial_norm = nn.LayerNorm(3 * F)
-            self.spatial_proj = nn.Linear(3 * F, 3 * F, bias=True)
-
-            # Initialize projection conservatively
-            with torch.no_grad():
-                self.spatial_proj.weight.copy_(torch.eye(3 * F) * 0.1)
-                self.spatial_proj.bias.zero_()
-
         # Separator streaming params
         self.output_size = ms_to_samples(stream_chunk_size_ms, sample_rate)  # samples of raw audio
         self.frames_per_output = math.ceil((self.output_size + 2 * self.decoder.pad - self.decoder.filter_length)
@@ -116,12 +105,19 @@ class TasNet(nn.Module):
         mixture = torch.cat([pad_ctx, mixture, pad_ctx], dim=2)
         return mixture, rest
 
-    def compute_spatial_features_smooth(self, left_waveform: torch.Tensor,
-                                        right_waveform: torch.Tensor) -> torch.Tensor:
+    def compute_spatial_features(self, left_waveform: torch.Tensor, right_waveform: torch.Tensor) -> torch.Tensor:
         """
-        Compute spatial features with smooth operations and no hard clamping.
+        Compute interaural spatial cues via STFT.
+
+        Args:
+            left_waveform (torch.Tensor): [batch, time]
+            right_waveform (torch.Tensor): [batch, time]
+
+        Returns:
+            spatial_feats (torch.Tensor): [batch, 3*F, T_frames]
+                concatenated ILD, cos(IPD), and sin(IPD) features.
         """
-        eps = 1e-5
+        eps = 1e-2  # Small value to avoid log(0) issues
 
         # Compute STFT
         stft_left = torch.stft(
@@ -131,7 +127,7 @@ class TasNet(nn.Module):
             win_length=self.analysis_window,
             window=self.stft_window_fn,
             return_complex=True
-        )
+        )  # [B, F, T]
 
         stft_right = torch.stft(
             right_waveform,
@@ -140,74 +136,46 @@ class TasNet(nn.Module):
             win_length=self.analysis_window,
             window=self.stft_window_fn,
             return_complex=True
-        )
+        )  # [B, F, T]
 
-        B, F, T = stft_left.shape
+        # Magnitude & Phase
+        mag_left = stft_left.abs().clamp(min=eps).float()  # Clamp to avoid zero
+        mag_right = stft_right.abs().clamp(min=eps).float()
+        phase_left = torch.angle(stft_left).float()
+        phase_right = torch.angle(stft_right).float()
 
-        # 1. Use log-sum-exp trick for stable magnitude computation
-        # Instead of mag = sqrt(real^2 + imag^2), use:
-        real_l, imag_l = stft_left.real, stft_left.imag
-        real_r, imag_r = stft_right.real, stft_right.imag
+        # ILD (Interaural Level Difference) - more stable computation
+        if torch.any(mag_left <= 0):
+            print("Non-positive mag_left before log10!", mag_left.min().item())
+            mag_left = mag_left.clamp(min=eps).float()
+        if torch.any(mag_right <= 0):
+            print("Non-positive mag_right before log10!", mag_right.min().item())
+            mag_right = mag_right.clamp(min=eps).float()
+        ild = 10.0 * (torch.log10(mag_left) - torch.log10(mag_right))
+        ild = torch.nan_to_num(ild, nan=0.0, posinf=60.0, neginf=-60.0)
+        ild = torch.clamp(ild, min=-60.0, max=60.0)
 
-        # Stable magnitude using log-sum-exp
-        log_mag_left = 0.5 * torch.logaddexp(
-            2 * torch.log(real_l.abs() + eps),
-            2 * torch.log(imag_l.abs() + eps)
-        )
-        log_mag_right = 0.5 * torch.logaddexp(
-            2 * torch.log(real_r.abs() + eps),
-            2 * torch.log(imag_r.abs() + eps)
-        )
+        # IPD (Interaural Phase Difference)
+        ipd = phase_left - phase_right
+        if torch.any(mag_right <= 0):
+            print("Non-positive mag_right before log10!", phase_left.min().item(), phase_right.min().item())
+        ipd = torch.remainder(ipd + torch.pi, 2 * torch.pi) - torch.pi
+        cos_ipd = torch.cos(ipd)
+        sin_ipd = torch.sin(ipd)
 
-        # 2. ILD using tanh for smooth bounding (no hard clamp)
-        log_diff = log_mag_left - log_mag_right
-        ild = torch.tanh(log_diff / 10.0)  # Smooth mapping to [-1, 1]
+        # Stack [ILD; cos(IPD); sin(IPD)] → [B, 3F, T]
+        ild_t = ild.permute(0, 2, 1)
+        cos_t = cos_ipd.permute(0, 2, 1)
+        sin_t = sin_ipd.permute(0, 2, 1)
+        stacked = torch.cat([ild_t, cos_t, sin_t], dim=2)
+        spatial_features = stacked.permute(0, 2, 1)  # [B, 3F, T]
 
-        # 3. IPD using vector normalization (automatically bounded)
-        # Create unit vectors from complex numbers
-        mag_left = torch.exp(log_mag_left)
-        mag_right = torch.exp(log_mag_right)
+        # Compute statistics for normalization
+        mean = spatial_features.mean(dim=(1, 2), keepdim=True)
+        std = spatial_features.std(dim=(1, 2), keepdim=True).clamp(min=eps)
+        spatial_features = (spatial_features - mean) / std + 1e-8  # Normalize to zero mean, unit variance
 
-        unit_left = stft_left / (mag_left + eps)
-        unit_right = stft_right / (mag_right + eps)
-
-        # Cross-correlation of unit vectors (automatically in [-1, 1])
-        cos_ipd = (unit_left * unit_right.conj()).real
-        sin_ipd = (unit_left * unit_right.conj()).imag
-
-        # 4. Feature normalization using smooth techniques
-        features_list = []
-
-        for feat in [ild, cos_ipd, sin_ipd]:
-            # Use instance normalization (smoother than batch norm)
-            feat_flat = feat.reshape(B, F, -1)
-
-            # Robust statistics using smooth approximations
-            mean = feat_flat.mean(dim=2, keepdim=True)
-
-            # Smooth variance estimation
-            var = (feat_flat - mean).pow(2).mean(dim=2, keepdim=True)
-            std = torch.sqrt(var + eps)
-
-            # Normalize
-            feat_norm = (feat - mean.unsqueeze(2)) / (std.unsqueeze(2) + eps)
-
-            # Use soft bounding with tanh instead of clamp
-            feat_norm = torch.tanh(feat_norm / 3.0) * 3.0
-
-            features_list.append(feat_norm)
-
-        # 5. Combine features
-        spatial_features = torch.cat([
-            f.permute(0, 2, 1) for f in features_list
-        ], dim=2).permute(0, 2, 1)  # [B, 3*F, T]
-
-        # 6. Learnable soft gating (sigmoid for smooth control)
-        if not hasattr(self, 'spatial_gate'):
-            self.spatial_gate = nn.Parameter(torch.zeros(1, 3 * F, 1))
-
-        gate = torch.sigmoid(self.spatial_gate - 2.0)  # Start near 0
-        spatial_features = spatial_features * gate
+        spatial_features = torch.clamp(spatial_features, min=-8.0, max=8.0)  # Training stability
 
         return spatial_features
 
