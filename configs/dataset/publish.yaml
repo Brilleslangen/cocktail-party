@@ -1,0 +1,5 @@
+# @package _global_
+defaults:
+  - _self_
+  - /dataset: static_big           # Dataset selection
+  - /wandb: default
