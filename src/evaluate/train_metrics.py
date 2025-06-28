@@ -120,7 +120,7 @@ def energy_weighted_si_sdr(
     Energy-weighted SI-SDR for variable-length, stereo/multi-channel batches.
     Returns [B] (per-sample energy-weighted SI-SDR).
     """
-    move_to_cpu = estimate.device == 'mps'
+    move_to_cpu = estimate.device.type == 'mps'
     return batch_metric_with_lengths(
         lambda ref_trim, est_trim: per_sample_energy_weighted_si_sdr(ref_trim, est_trim, eps=eps),
         estimate, reference, lengths, n_jobs=n_jobs, move_to_cpu=move_to_cpu)
