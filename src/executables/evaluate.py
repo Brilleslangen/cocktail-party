@@ -13,7 +13,7 @@ from hydra.utils import instantiate
 from tabulate import tabulate
 
 from src.data.collate import setup_test_dataloader
-from src.evaluate import compute_mask, count_parameters, count_macs
+from src.evaluate import count_parameters, count_macs
 from src.evaluate.eval_metrics import compute_evaluation_metrics, compute_rtf
 from src.helpers import prettify_macs, prettify_param_count, setup_device_optimizations
 from src.data.streaming import Streamer
@@ -32,6 +32,8 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
     # Initialize metric accumulators similar to validate_epoch
     totals = {
+        'ew_si_sdr_new': 0.0,
+        "ew_si_sdr": 0.0,
         "ew_si_sdr_i": 0.0,
         "ew_estoi": 0.0,
         "ew_pesq": 0.0,
@@ -73,11 +75,8 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
             B = ests.size(0)
 
-            # Compute mask
-            mask = compute_mask(lengths, ests.size(-1), ests.device)
-
             # Compute all evaluation metrics using the abstracted function
-            metrics = compute_evaluation_metrics(ests, mix, refs, model.sample_rate)
+            metrics = compute_evaluation_metrics(ests, mix, refs, model.sample_rate, lengths)
 
             # Accumulate metrics
             for metric_name, metric_values in metrics.items():
@@ -94,7 +93,9 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
         std = np.sqrt(max(0, variance))  # Avoid negative variance due to numerical errors
 
         # Format the output names
-        if metric_name == 'ew_si_sdr_i':
+        if metric_name == 'ew_si_sdr':
+            display_name = 'EW-SI-SDR (dB)'
+        elif metric_name == 'ew_si_sdr_i':
             display_name = 'EW-SI-SDRi (dB)'
         elif metric_name == 'ew_estoi':
             display_name = 'ESTOI'
@@ -106,6 +107,8 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
             display_name = 'Confusion Rate (%)'
             mean *= 100  # Convert to percentage
             std *= 100
+        elif metric_name == 'ew_si_sdr_new':
+            display_name = 'EW-SI-SDR New (dB)'
 
         results[display_name] = (mean, std)
 

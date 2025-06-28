@@ -6,16 +6,12 @@ import torch
 import torch.nn as nn
 from torch.utils.flop_counter import FlopCounterMode
 
-from torchmetrics.audio import PerceptualEvaluationSpeechQuality
-from torchmetrics.audio import ShortTimeObjectiveIntelligibility
+from torchmetrics.audio import PerceptualEvaluationSpeechQuality, ShortTimeObjectiveIntelligibility
+from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio
 from joblib import Parallel, delayed
-
-try :
-    from binaqual import calculate_binaqual
-except ImportError:
-    print("binaqual package not found, BINAQUAL metrics will not be available.")
-
-from src.evaluate.train_metrics import energy_weighted_si_sdr_i
+from binaqual import calculate_binaqual
+from src.evaluate.train_metrics import energy_weighted_si_sdr_i, energy_weighted_si_sdr, energy_weighted_sdr
+from src.evaluate.loss import compute_energy_weights
 
 
 # ============================================================================
@@ -62,67 +58,52 @@ def count_macs(model: nn.Module, seconds: float = 1.0) -> int:
 # Perceptual Metrics
 # ============================================================================
 
-def batch_estoi(est, ref, sample_rate=16000):
+def batch_estoi(est, ref, sample_rate):
     """Extended Short-Time Objective Intelligibility (ESTOI)."""
     device = est.device
     B = est.shape[0]
 
     # Handle MPS by moving to CPU
     if device.type == 'mps':
-        est_cpu = est.cpu().float()
-        ref_cpu = ref.cpu().float()
-        stoi = ShortTimeObjectiveIntelligibility(sample_rate, extended=True)
+        est = est.cpu().float()
+        ref = ref.cpu().float()
 
-        scores = []
-        for i in range(B):
-            score = stoi(est_cpu[i:i + 1], ref_cpu[i:i + 1])
-            scores.append(score.item())
+    estoi = ShortTimeObjectiveIntelligibility(sample_rate, extended=True)
 
-        return torch.tensor(scores, device=device, dtype=torch.float32)
-    else:
-        stoi = ShortTimeObjectiveIntelligibility(sample_rate, extended=True).to(device)
+    scores = []
+    for i in range(B):
+        score = estoi(est[i:i + 1], ref[i:i + 1])
+        scores.append(score.item())
 
-        scores = []
-        for i in range(B):
-            score = stoi(est[i:i + 1], ref[i:i + 1])
-            scores.append(score.item())
-
-        return torch.tensor(scores, device=device)
+    return torch.tensor(scores, device=device, dtype=torch.float32)
 
 
-def batch_pesq(est, ref, sample_rate=16000, mode='wb'):
+def batch_pesq(est, ref, sample_rate, mode='wb'):
     """Perceptual Evaluation of Speech Quality (PESQ)."""
     device = est.device
     B = est.shape[0]
 
     # Handle MPS by moving to CPU
     if device.type == 'mps':
-        est_cpu = est.cpu().float()
-        ref_cpu = ref.cpu().float()
-        pesq = PerceptualEvaluationSpeechQuality(sample_rate, mode)
+        est = est.cpu().float()
+        ref = ref.cpu().float()
 
-        scores = []
-        for i in range(B):
-            score = pesq(est_cpu[i:i + 1], ref_cpu[i:i + 1])
-            scores.append(score.item())
+    pesq = PerceptualEvaluationSpeechQuality(sample_rate, mode).to(device)
 
-        return torch.tensor(scores, device=device, dtype=torch.float32)
-    else:
-        pesq = PerceptualEvaluationSpeechQuality(sample_rate, mode).to(device)
+    scores = []
+    for i in range(B):
+        score = pesq(est[i:i + 1], ref[i:i + 1])
+        scores.append(score.item())
 
-        scores = []
-        for i in range(B):
-            score = pesq(est[i:i + 1], ref[i:i + 1])
-            scores.append(score.item())
-
-        return torch.tensor(scores, device=device)
+    return torch.tensor(scores, device=device)
 
 
-def energy_weighted_estoi(est, ref, sample_rate=16000, eps=1e-8):
+def energy_weighted_estoi(est, ref, sample_rate, lengths: torch.Tensor, eps=1e-8):
     """
     Energy-weighted Extended Short-Time Objective Intelligibility for stereo signals.
 
     Args:
+        lengths:
         est: [B, 2, T] - estimated stereo signal
         ref: [B, 2, T] - reference stereo signal
         sample_rate: sampling rate
@@ -131,27 +112,28 @@ def energy_weighted_estoi(est, ref, sample_rate=16000, eps=1e-8):
     Returns:
         [B] - energy-weighted ESTOI per sample
     """
+
+    # Trim to original lengths
+    for L in lengths:
+        est = est[:, :, :L]
+        ref = ref[:, :, :L]
+
     # Compute per-channel ESTOI
     estoi_left = batch_estoi(est[:, 0, :], ref[:, 0, :], sample_rate)
     estoi_right = batch_estoi(est[:, 1, :], ref[:, 1, :], sample_rate)
 
-    # Compute channel energies for weighting
-    energy_left = (ref[:, 0, :] ** 2).sum(dim=1)
-    energy_right = (ref[:, 1, :] ** 2).sum(dim=1)
-    total_energy = energy_left + energy_right + eps
-
     # Weight by energy
-    weight_left = energy_left / total_energy
-    weight_right = energy_right / total_energy
+    weight_left, weight_right = compute_energy_weights(ref, lengths)
 
     return weight_left * estoi_left + weight_right * estoi_right
 
 
-def energy_weighted_pesq(est, ref, sample_rate=16000, mode='wb', eps=1e-8):
+def energy_weighted_pesq(est, ref, sample_rate, lengths: torch.Tensor, mode='wb', eps=1e-8):
     """
     Energy-weighted Perceptual Evaluation of Speech Quality for stereo signals.
 
     Args:
+        lengths:
         est: [B, 2, T] - estimated stereo signal
         ref: [B, 2, T] - reference stereo signal
         sample_rate: sampling rate
@@ -161,18 +143,17 @@ def energy_weighted_pesq(est, ref, sample_rate=16000, mode='wb', eps=1e-8):
     Returns:
         [B] - energy-weighted PESQ per sample
     """
+    # Trim to original lengths
+    for L in lengths:
+        est = est[:, :, :L]
+        ref = ref[:, :, :L]
+
     # Compute per-channel PESQ
     pesq_left = batch_pesq(est[:, 0, :], ref[:, 0, :], sample_rate, mode)
     pesq_right = batch_pesq(est[:, 1, :], ref[:, 1, :], sample_rate, mode)
 
-    # Compute channel energies for weighting
-    energy_left = (ref[:, 0, :] ** 2).sum(dim=1)
-    energy_right = (ref[:, 1, :] ** 2).sum(dim=1)
-    total_energy = energy_left + energy_right + eps
-
     # Weight by energy
-    weight_left = energy_left / total_energy
-    weight_right = energy_right / total_energy
+    weight_left, weight_right = compute_energy_weights(ref, lengths)
 
     return weight_left * pesq_left + weight_right * pesq_right
 
@@ -196,6 +177,7 @@ def _prep_one(
 def compute_binaqual(
         est: torch.Tensor,  # [B, 2, T]
         ref: torch.Tensor,  # [B, 2, T]
+        lengths: torch.Tensor,
         n_jobs: int = 0  # 0 = serial, -1 = "all cores", >0 = explicit
 ) -> torch.Tensor:
     """
@@ -211,6 +193,11 @@ def compute_binaqual(
         raise ValueError("est and ref must have the same shape [B, 2, T].")
     if est.size(1) != 2:
         raise ValueError("BINAQUAL is defined for stereo signals (C == 2).")
+
+    # Trim to original lengths
+    for L in lengths:
+        est = est[:, :, :L]
+        ref = ref[:, :, :L]
 
     B, _, _ = est.shape
 
@@ -234,8 +221,8 @@ def compute_binaqual(
     return torch.tensor(ls_values, dtype=torch.float32, device=est.device)
 
 
-def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor, threshold_db: float = 0.0)\
-        -> torch.Tensor:
+def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor, lengths: torch.Tensor,
+                           threshold_db: float = 0.0) -> torch.Tensor:
     """
     Compute confusion rate based on SDR difference threshold.
     A sample is confused if separating the interferer gives better SDR than separating the target.
@@ -253,48 +240,26 @@ def compute_confusion_rate(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tens
     confused = torch.zeros(B, device=est.device)
 
     for b in range(B):
-        # Extract mono signals for this sample
-        est_mono = est[b].mean(0)
-        mix_mono = mix[b].mean(0)
-        ref_mono = ref[b].mean(0)
+        # Trim to true lengths
+        L = int(lengths[b])
+        mix = mix[b, :, :L]
+        est = est[b, :, :L]
+        ref = ref[b, :, :L]
 
         # Compute interferer reference (mix - target)
-        interferer_mono = mix_mono - ref_mono
+        interferer = mix - ref
 
         # Compute SDR with target as reference
-        sdr_target = compute_sdr_mono(est_mono, ref_mono)
+        sdr_target = energy_weighted_sdr(est, ref, lengths=None, eps=1e-8)
 
         # Compute SDR with interferer as reference
-        sdr_interferer = compute_sdr_mono(est_mono, interferer_mono)
+        sdr_interferer = energy_weighted_sdr(interferer, ref, lengths=None, eps=1e-8)
 
         # Check if model separated the interferer instead of target
         if sdr_interferer > sdr_target + threshold_db:
             confused[b] = 1.0
 
     return confused
-
-
-def compute_sdr_mono(est: torch.Tensor, ref: torch.Tensor, eps: float = 1e-8) -> float:
-    """
-    Compute Signal-to-Distortion Ratio for mono signals.
-
-    Args:
-        est: [T] - estimated signal
-        ref: [T] - reference signal
-        eps: small value for numerical stability
-
-    Returns:
-        SDR in dB
-    """
-    # Find optimal scaling
-    alpha = (est * ref).sum() / ((ref ** 2).sum() + eps)
-
-    # Compute SDR
-    signal_power = (alpha * ref) ** 2
-    distortion_power = (est - alpha * ref) ** 2
-
-    sdr = 10 * torch.log10(signal_power.sum() / (distortion_power.sum() + eps))
-    return sdr.item()
 
 
 def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
@@ -347,8 +312,55 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
     return rtf
 
 
+@torch.no_grad()
+def energy_weighted_si_sdr_eval(est, ref, lengths, eps=1e-8):
+    """
+    Energy-weighted SI-SDR for stereo output, batchwise.
+
+    Args:
+        eps:
+        est: [B, 2, T] - estimated signals (possibly padded)
+        ref: [B, 2, T] - reference signals (possibly padded)
+        lengths: [B]   - valid (unpadded) lengths per sample
+
+    Returns:
+        [B] tensor of weighted SI-SDRs for each sample
+    """
+    B, C, T = est.shape
+    assert C == 2
+
+    si_sdr_L = []
+    si_sdr_R = []
+
+    for b in range(B):
+        L = int(lengths[b])
+        estL = est[b, 0, :L].float()
+        refL = ref[b, 0, :L].float()
+        estR = est[b, 1, :L].float()
+        refR = ref[b, 1, :L].float()
+        # Each returns scalar SI-SDR
+        sdr_L = scale_invariant_signal_distortion_ratio(estL, refL, zero_mean=True)
+        sdr_R = scale_invariant_signal_distortion_ratio(estR, refR, zero_mean=True)
+        si_sdr_L.append(sdr_L)
+        si_sdr_R.append(sdr_R)
+
+    si_sdr_L = torch.stack(si_sdr_L)  # [B]
+    si_sdr_R = torch.stack(si_sdr_R)  # [B]
+
+    # Compute energy-based weights (using unpadded signals)
+    energy_L = torch.tensor([ref[b, 0, :int(lengths[b])].float().pow(2).sum() for b in range(B)], device=est.device)
+    energy_R = torch.tensor([ref[b, 1, :int(lengths[b])].float().pow(2).sum() for b in range(B)], device=est.device)
+    total_energy = energy_L + energy_R + eps
+    wL = energy_L / total_energy
+    wR = energy_R / total_energy
+
+    # Weighted SI-SDR per sample
+    weighted_sisdr = wL * si_sdr_L + wR * si_sdr_R  # [B]
+    return weighted_sisdr
+
+
 def compute_evaluation_metrics(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor,
-                                sample_rate: int = 16000) -> Dict[str, torch.Tensor]:
+                               sample_rate: int, lengths: torch.Tensor) -> Dict[str, torch.Tensor]:
     """
     Compute all evaluation metrics with energy weighting where appropriate.
 
@@ -362,8 +374,10 @@ def compute_evaluation_metrics(est: torch.Tensor, mix: torch.Tensor, ref: torch.
         dict with metric names and [B] tensor values
     """
     metrics = {
-        'ew_si_sdr_i': energy_weighted_si_sdr_i(est, mix, ref),
-        'ew_estoi': energy_weighted_estoi(est, ref, sample_rate),
+        'ew_si_sdr_new': energy_weighted_si_sdr_eval(est, ref, lengths=lengths),
+        'ew_si_sdr': energy_weighted_si_sdr(est, ref),
+        'ew_si_sdr_i': energy_weighted_si_sdr_i(est, mix, ref, lengths),
+        'ew_estoi': energy_weighted_estoi(est, ref, sample_rate, lengths),
         'ew_pesq': energy_weighted_pesq(est, ref, sample_rate),
         'binaqual': compute_binaqual(est, ref, n_jobs=-1),
         'confusion_rate': compute_confusion_rate(est, mix, ref)
@@ -382,7 +396,6 @@ __all__ = [
     'energy_weighted_pesq',
     'compute_binaqual',
     'compute_confusion_rate',
-    'compute_sdr_mono',
     'compute_rtf',
     'compute_evaluation_metrics'
 ]

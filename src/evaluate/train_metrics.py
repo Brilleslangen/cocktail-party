@@ -1,140 +1,137 @@
 # src/evaluate/metrics.py
 import torch
+from src.evaluate.loss import compute_energy_weights, compute_mask, masked_mse
+from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio, signal_distortion_ratio
+
+from joblib import Parallel, delayed
+
+
+def batch_metric_with_lengths(
+        metric_func,  # Callable: takes (ref_trimmed, est_trimmed)
+        est: torch.Tensor,  # [B, C, T]
+        ref: torch.Tensor,  # [B, C, T]
+        lengths: torch.Tensor,  # [B]
+        n_jobs: int = 0,  # 0=serial, -1=all cores, >0=explicit
+        move_to_cpu: bool = False,  # Move to CPU if necessary
+        device: torch.device = None
+) -> torch.Tensor:
+    """
+    Compute a per-sample metric on [B, C, T] tensors, trimming by lengths.
+    metric_func should take (ref_trimmed, est_trimmed), both [C, L], and return a float.
+    """
+    B, C, T = est.shape
+    device = device or est.device
+
+    def _prep_one_wrapper(b):
+        L = int(lengths[b])
+        ref_trim = ref[b, :, :L]
+        est_trim = est[b, :, :L]
+
+        if move_to_cpu:
+            ref_trim = ref_trim.cpu()
+            est_trim = est_trim.cpu()
+
+        return metric_func(ref_trim, est_trim)
+
+    if n_jobs == 0 or B == 1:
+        results = [_prep_one_wrapper(b) for b in range(B)]
+    else:
+        results = Parallel(n_jobs=n_jobs, backend="loky")(
+            delayed(_prep_one_wrapper)(b)
+            for b in range(B)
+        )
+
+    return torch.tensor(results, dtype=torch.float32, device=device)
 
 
 # ============================================================================
 # Energy-Weighted Metrics (for training)
 # ============================================================================
 
-def energy_weighted_mse(est, ref, eps=1e-8):
+def per_sample_energy_weighted_sdr(
+        reference: torch.Tensor,
+        estimate: torch.Tensor,
+        eps: float = 1e-8
+) -> torch.Tensor:
     """
-    Energy-weighted Mean Squared Error for stereo signals.
+    Compute energy-weighted SDR for a single stereo (or multi-channel) pair of signals.
 
     Args:
-        est: [B, 2, T] - estimated stereo signal
-        ref: [B, 2, T] - reference stereo signal
-        mask: [B, T] - valid samples mask
+        reference: [C, L] reference signal (trimmed)
+        estimate: [C, L] estimated signal (trimmed)
         eps: small value for numerical stability
 
     Returns:
-        [B] - energy-weighted MSE per sample
+        Scalar energy-weighted SDR value for the sample.
     """
-    # Compute per-channel MSE
-    mse_left = ((est[:, 0, :] - ref[:, 0, :]) ** 2).sum(dim=1)
-    mse_right = ((est[:, 1, :] - ref[:, 1, :]) ** 2).sum(dim=1)
+    channel_sdrs = signal_distortion_ratio(
+        estimate.unsqueeze(0),  # [1, C, L]
+        reference.unsqueeze(0),  # [1, C, L]
+        zero_mean=True,
+    ).squeeze(0)  # [C]
 
-    # Compute channel energies
-    energy_left = ((ref[:, 0, :]) ** 2).sum(dim=1)
-    energy_right = ((ref[:, 1, :]) ** 2).sum(dim=1)
-    total_energy = energy_left + energy_right + eps
-
-    # Weight by energy
-    weight_left = energy_left / total_energy
-    weight_right = energy_right / total_energy
-
-    return weight_left * mse_left + weight_right * mse_right
+    channel_weights = compute_energy_weights(reference, mask=None, eps=eps)  # [C]
+    return (channel_weights * channel_sdrs).sum()
 
 
-def energy_weighted_sdr(est, ref, eps=1e-8):
+def energy_weighted_sdr(
+        estimate: torch.Tensor,  # [B, C, T]
+        reference: torch.Tensor,  # [B, C, T]
+        lengths: torch.Tensor,
+        eps: float = 1e-8,
+        n_jobs: int = 0):
     """
-    Energy-weighted Signal-to-Distortion Ratio for stereo signals.
-
-    Args:
-        est: [B, 2, T] - estimated stereo signal
-        ref: [B, 2, T] - reference stereo signal
-        mask: [B, T] - valid samples mask
-        eps: small value for numerical stability
-
-    Returns:
-        [B] - energy-weighted SDR in dB per sample
+    Efficient, correct batch energy-weighted SDR for stereo/multi-channel and variable-length signals.
+    Returns [B] (per sample).
     """
-
-    # Compute per-channel SDR
-    def channel_sdr(est_ch, ref_ch):
-        # Find optimal scaling factor
-        num = (est_ch * ref_ch).sum(dim=1, keepdim=True)
-        den = (ref_ch ** 2).sum(dim=1, keepdim=True) + eps
-        alpha = num / den
-
-        # Scaled reference
-        s_target = alpha * ref_ch
-
-        # Distortion
-        e_distortion = (est_ch - ref_ch)
-
-        # SDR
-        target_power = (s_target ** 2).sum(dim=1)
-        distortion_power = (e_distortion ** 2).sum(dim=1) + eps
-
-        return 10 * torch.log10(target_power / distortion_power)
-
-    sdr_left = channel_sdr(est[:, 0, :], ref[:, 0, :])
-    sdr_right = channel_sdr(est[:, 1, :], ref[:, 1, :])
-
-    # Compute channel energies for weighting
-    energy_left = ((ref[:, 0, :]) ** 2).sum(dim=1)
-    energy_right = ((ref[:, 1, :]) ** 2).sum(dim=1)
-    total_energy = energy_left + energy_right + eps
-
-    # Weight by energy
-    weight_left = energy_left / total_energy
-    weight_right = energy_right / total_energy
-
-    return weight_left * sdr_left + weight_right * sdr_right
+    move_to_cpu = estimate.device.type == 'mps'
+    return batch_metric_with_lengths(
+        lambda ref_trim, est_trim: per_sample_energy_weighted_sdr(ref_trim, est_trim, eps=eps),
+        estimate, reference, lengths, n_jobs=n_jobs, move_to_cpu=move_to_cpu)
 
 
-def energy_weighted_si_sdr(est, ref, eps=1e-8):
+def per_sample_energy_weighted_si_sdr(
+        reference: torch.Tensor,  # [C, L]
+        estimate: torch.Tensor,   # [C, L]
+        eps: float = 1e-8
+) -> torch.Tensor:
     """
-    Energy-weighted Scale-Invariant Signal-to-Distortion Ratio for stereo signals.
-
-    Args:
-        est: [B, 2, T] - estimated stereo signal
-        ref: [B, 2, T] - reference stereo signal
-        eps: small value for numerical stability
-
-    Returns:
-        [B] - energy-weighted SI-SDR in dB per sample
+    Compute energy-weighted SI-SDR for a single stereo (or multi-channel) pair of signals.
+    Uses torchmetrics implementation.
     """
+    channel_si_sdrs = scale_invariant_signal_distortion_ratio(
+        estimate.unsqueeze(0),   # [1, C, L]
+        reference.unsqueeze(0),  # [1, C, L]
+        zero_mean=True,
+    ).squeeze(0)                 # [C]
 
-    # Compute per-channel SI-SDR
-    def channel_si_sdr(est_ch, ref_ch):
-        # Zero-mean normalization
-
-        # Projection
-        dot_product = (est_ch * ref_ch).sum(dim=1, keepdim=True)
-        ref_energy = (ref_ch ** 2).sum(dim=1, keepdim=True) + eps
-        proj_scale = dot_product / ref_energy
-
-        # Target and noise
-        s_target = proj_scale * ref_ch
-        e_noise = est_ch - s_target
-
-        # SI-SDR
-        target_power = (s_target ** 2).sum(dim=1)
-        noise_power = (e_noise ** 2).sum(dim=1) + eps
-
-        return 10 * torch.log10(target_power / noise_power)
-
-    si_sdr_left = channel_si_sdr(est[:, 0, :], ref[:, 0, :])
-    si_sdr_right = channel_si_sdr(est[:, 1, :], ref[:, 1, :])
-
-    # Compute channel energies for weighting
-    energy_left = ((ref[:, 0, :]) ** 2).sum(dim=1)
-    energy_right = ((ref[:, 1, :]) ** 2).sum(dim=1)
-    total_energy = energy_left + energy_right + eps
-
-    # Weight by energy
-    weight_left = energy_left / total_energy
-    weight_right = energy_right / total_energy
-
-    return weight_left * si_sdr_left + weight_right * si_sdr_right
+    channel_weights = compute_energy_weights(reference, mask=None, eps=eps)  # [C]
+    return (channel_weights * channel_si_sdrs).sum()
 
 
-def energy_weighted_si_sdr_i(est, mix, ref, eps=1e-8):
+def energy_weighted_si_sdr(
+        estimate: torch.Tensor,  # [B, C, T]
+        reference: torch.Tensor,  # [B, C, T]
+        lengths: torch.Tensor,
+        eps: float = 1e-8,
+        n_jobs: int = 0
+) -> torch.Tensor:
+    """
+    Energy-weighted SI-SDR for variable-length, stereo/multi-channel batches.
+    Returns [B] (per-sample energy-weighted SI-SDR).
+    """
+    move_to_cpu = estimate.device == 'mps'
+    return batch_metric_with_lengths(
+        lambda ref_trim, est_trim: per_sample_energy_weighted_si_sdr(ref_trim, est_trim, eps=eps),
+        estimate, reference, lengths, n_jobs=n_jobs, move_to_cpu=move_to_cpu)
+
+
+def energy_weighted_si_sdr_i(est, mix, ref, lengths: torch.Tensor, eps=1e-8):
     """
     Energy-weighted Scale-Invariant Signal-to-Distortion Ratio Improvement.
 
     Args:
+        lengths:
         est: [B, 2, T] - estimated stereo signal
         mix: [B, 2, T] - mixture stereo signal
         ref: [B, 2, T] - reference stereo signal
@@ -144,16 +141,18 @@ def energy_weighted_si_sdr_i(est, mix, ref, eps=1e-8):
     Returns:
         [B] - energy-weighted SI-SDR improvement in dB per sample
     """
-    si_sdr_est = energy_weighted_si_sdr(est, ref, eps)
-    si_sdr_mix = energy_weighted_si_sdr(mix, ref, eps)
+
+    si_sdr_est = energy_weighted_si_sdr(est, ref, lengths=lengths, eps=eps)
+    si_sdr_mix = energy_weighted_si_sdr(mix, ref, lengths=lengths, eps=eps)
     return si_sdr_est - si_sdr_mix
 
 
-def compute_validation_metrics(est, mix, ref):
+def compute_validation_metrics(est, mix, ref, lengths: torch.Tensor):
     """
     Compute all energy-weighted metrics for validation.
 
     Args:
+        lengths:
         est: [B, 2, T] - estimated stereo signal
         mix: [B, 2, T] - mixture stereo signal
         ref: [B, 2, T] - reference stereo signal
@@ -163,10 +162,10 @@ def compute_validation_metrics(est, mix, ref):
         dict with metric names and [B] tensor values
     """
     metrics = {
-        'ew_mse': energy_weighted_mse(est, ref),
-        'ew_sdr': energy_weighted_sdr(est, ref),
-        'ew_si_sdr': energy_weighted_si_sdr(est, ref),
-        'ew_si_sdr_i': energy_weighted_si_sdr_i(est, mix, ref)
+        'ew_mse': masked_mse(est, ref, lengths),
+        'ew_sdr': energy_weighted_sdr(est, ref, lengths),
+        'ew_si_sdr': energy_weighted_si_sdr(est, ref, lengths),
+        'ew_si_sdr_i': energy_weighted_si_sdr_i(est, mix, ref, lengths)
     }
 
     return metrics

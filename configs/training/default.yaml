@@ -27,4 +27,4 @@ model_save_dir: "artifacts"
 print_config: false
 
 defaults:
-  - loss: sdr
+  - loss: snr
