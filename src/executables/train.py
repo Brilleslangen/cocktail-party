@@ -261,7 +261,7 @@ def main(cfg: DictConfig):
               f"Train MSE: {train_mse:.4f} | "
               f"Val Loss: {val_stats['loss']:.4f} | "
               f"EW-SI-SDRi: {val_stats['ew_si_sdr_i']:.2f} dB | "
-              f"EW-SI-SDR: {val_stats['ew_si_sdr']:.2f} dB"
+              f"EW-SI-SDR: {val_stats['ew_si_sdr']:.2f} dB | "
               f"EW-SDR: {val_stats['ew_sdr']:.2f} dB")
 
         # Early stopping check

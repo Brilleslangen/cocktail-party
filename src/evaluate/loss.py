@@ -1,58 +1,6 @@
 import torch
 import torch.nn as nn
 
-
-def compute_mask(lengths, T, device):
-    """
-    lengths: [B] (on any device)
-    Returns mask of shape [B, T] (on target device)
-    """
-    return (torch.arange(T, device=device)[None, :] < lengths.to(device)[:, None]).float()
-
-
-def compute_energy_weights(
-        ref,  # [B, C, T], or list of [C, L_b], or [C, L]
-        mask=None,
-        eps=1e-8,
-):
-    """
-    Compute energy-based weights for multi-channel signals.
-
-    Args:
-        ref:   [B, C, T] batch, or list of [C, L_b] tensors, or [C, L]
-        mask:  [B, T], [L], or None
-        eps:   float
-
-    Returns:
-        weights: [B, C] if batch/list, [C] if single sample
-    """
-    if isinstance(ref, list):  # Ragged batch: list of [C, L_b]
-        weights = []
-        for r in ref:
-            channel_energy = (r ** 2).sum(dim=1)  # [C]
-            total_energy = channel_energy.sum() + eps
-            weights.append(channel_energy / total_energy)  # [C]
-        return torch.stack(weights, dim=0)  # [B, C]
-    elif ref.ndim == 3:  # [B, C, T]
-        if mask is not None:
-            channel_energy = ((ref * mask.unsqueeze(1)) ** 2).sum(dim=2)  # [B, C]
-        else:
-            channel_energy = (ref ** 2).sum(dim=2)  # [B, C]
-        total_energy = channel_energy.sum(dim=1, keepdim=True) + eps  # [B, 1]
-        return channel_energy / total_energy  # [B, C]
-    elif ref.ndim == 2:  # [C, L]
-        if mask is not None:
-            channel_energy = ((ref * mask.unsqueeze(0)) ** 2).sum(dim=1)  # [C]
-        else:
-            channel_energy = (ref ** 2).sum(dim=1)  # [C]
-        total_energy = channel_energy.sum() + eps
-        return channel_energy / total_energy  # [C]
-    else:
-        raise ValueError(
-            f"ref must be [C, L], [B, C, T], or list of [C, L_b]. Got {type(ref)}, shape {getattr(ref, 'shape', None)}."
-        )
-
-
 def masked_snr_loss(est, ref, mask, loss_scale=1.0, eps=1e-8):
     """
     est, ref, mask: [B, T]

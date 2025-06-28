@@ -32,7 +32,6 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
     # Initialize metric accumulators similar to validate_epoch
     totals = {
-        'ew_si_sdr_new': 0.0,
         "ew_si_sdr": 0.0,
         "ew_si_sdr_i": 0.0,
         "ew_estoi": 0.0,
