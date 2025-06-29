@@ -9,12 +9,14 @@ def per_sample_sdr(
         reference: torch.Tensor,    # [C, L]
         estimate: torch.Tensor,     # [C, L]
         multi_channel: bool = True,
-        eps: float = 1e-8
+        eps: float = 1e-8,
+        seed=42
 ) -> torch.Tensor:
     """
     Compute SDR for a single stereo (or multichannel) pair of signals.
 
     Args:
+        seed:
         reference: [C, L] reference signal (trimmed)
         estimate:  [C, L] estimated signal (trimmed)
         multi_channel: If True, flatten all channels and compute SDR as one signal (MC-SDR).
@@ -25,7 +27,8 @@ def per_sample_sdr(
         Scalar SDR value for the sample.
     """
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
-    if torch.allclose(reference, estimate, atol=eps):
+    if torch.allclose(reference.float(), estimate.float(), atol=eps):
+        torch.manual_seed(seed)
         noise = torch.randn_like(estimate) * 1e-6
         estimate = estimate + noise
 
@@ -67,7 +70,8 @@ def per_sample_SI_SDR(
         reference: torch.Tensor,  # [C, L]
         estimate: torch.Tensor,   # [C, L]
         multi_channel: bool = True,
-        eps: float = 1e-8
+        eps: float = 1e-8,
+        seed=42
 ) -> torch.Tensor:
     """
     Compute SI-SDR for a single stereo (or multichannel) pair of signals.
@@ -86,7 +90,8 @@ def per_sample_SI_SDR(
         raise ValueError("Reference signal is all zeros, cannot compute SI-SDR.")
 
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
-    if torch.allclose(reference, estimate, atol=eps):
+    if torch.allclose(reference.float(), estimate.float(), atol=eps):
+        torch.manual_seed(seed)
         noise = torch.randn_like(estimate) * 1e-6
         estimate = estimate + noise
 

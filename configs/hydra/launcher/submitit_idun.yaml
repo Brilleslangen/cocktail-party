@@ -10,3 +10,7 @@ gres: gpu:1
 constraint: "a100"
 mem_gb: 80
 timeout_min: 2300 # 25 hours
+
+env:
+  WANDB_ARTIFACT_CACHE_DIR: /cluster/home/nicolts/cocktail-party/artifacts
+

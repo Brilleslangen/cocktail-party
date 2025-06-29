@@ -250,7 +250,7 @@ def main(cfg: DictConfig):
 
     for epoch in range(1, cfg.training.params.max_epochs + 1):
         start_time = time.time()
-        train_loss, train_mse = 0, 0 #train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype)
+        train_loss, train_mse = train_epoch(model, train_loader, loss, optimizer, device, use_amp, amp_dtype)
         val_stats = validate_epoch(model, val_loader, loss, device, use_amp, amp_dtype)
         time_elapsed = format_time(time.time() - start_time)
 

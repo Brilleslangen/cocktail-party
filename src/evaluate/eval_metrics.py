@@ -14,7 +14,6 @@ from src.evaluate.pkg_funcs import compute_energy_weights, parallel_batch_metric
 try:
     from binaqual import calculate_binaqual
 except ImportError:
-    print("BINAQUAL package not found. BINAQUAL metrics will not be available.")
     calculate_binaqual = None
 
 
