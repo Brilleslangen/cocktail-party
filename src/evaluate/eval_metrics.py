@@ -7,10 +7,15 @@ import torch.nn as nn
 from torch.utils.flop_counter import FlopCounterMode
 
 from torchmetrics.audio import PerceptualEvaluationSpeechQuality, ShortTimeObjectiveIntelligibility
-from binaqual import calculate_binaqual
 from src.evaluate.train_metrics import compute_si_sdr_i, compute_SI_SDRs, compute_SDRs, \
     per_sample_sdr
 from src.evaluate.pkg_funcs import compute_energy_weights, parallel_batch_metric_with_lengths
+
+try:
+    from binaqual import calculate_binaqual
+except ImportError:
+    print("BINAQUAL package not found. BINAQUAL metrics will not be available.")
+    calculate_binaqual = None
 
 
 # ============================================================================
