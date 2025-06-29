@@ -12,7 +12,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from src.data.collate import setup_train_dataloaders
-from src.evaluate import Loss, compute_mask, compute_validation_metrics, count_parameters, count_macs
+from src.evaluate import Loss, compute_validation_metrics, count_parameters, count_macs
 from src.evaluate.loss import MaskedMSELoss
 from src.helpers import (
     prettify_macs,
