@@ -7,6 +7,6 @@ partition: GPUQ
 account: share-ie-idi
 nodes: 1
 gres: gpu:1
-constraint: "a100"
-mem_gb: 80
+constraint: "h100|a100&gpu80g"
+mem_gb: 20
 timeout_min: 2300 # 25 hours
