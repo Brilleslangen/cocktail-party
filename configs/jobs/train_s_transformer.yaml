@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - _self_
+  - /runs/offline: m-tcn
+
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      runs/offline: s-transformer
+
+training:
+    params:
+      batch_size: 2
+
