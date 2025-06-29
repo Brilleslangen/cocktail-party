@@ -16,4 +16,5 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      model_artifact: oracle-targets-offline:latest
+      model_artifact: oracle-targets-offline:latest, oracle-mix-offline:latest, oracle-targets-streaming:latest, 
+                      oracle-mix-streaming:latest

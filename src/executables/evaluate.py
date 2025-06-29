@@ -32,6 +32,8 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
     # Initialize metric accumulators similar to validate_epoch
     totals = {
+        "mc_si_sdr": 0.0,
+        "mc_si_sdr_i": 0.0,
         "ew_si_sdr": 0.0,
         "ew_si_sdr_i": 0.0,
         "ew_estoi": 0.0,
@@ -86,13 +88,20 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
     # Compute mean and std for each metric
     results = {}
-    for metric_name in totals:
-        mean = totals[metric_name] / total_examples
-        variance = (squares[metric_name] / total_examples) - (mean ** 2)
-        std = np.sqrt(max(0, variance))  # Avoid negative variance due to numerical errors
+    for metric_name, values in metrics.items():
+        # Convert to numpy array for nan-aware ops
+        values = torch.asarray(values)
+
+        # Mask out NaNs for mean/std
+        mean = torch.nanmean(values)
+        std = torch.sqrt(torch.nanmean(values ** 2) - mean ** 2)
 
         # Format the output names
-        if metric_name == 'ew_si_sdr':
+        if metric_name == 'mc_si_sdr':
+            display_name = 'MC-SI-SDR (dB)'
+        elif metric_name == 'mc_si_sdr_i':
+            display_name = 'MC-SI-SDRi (dB)'
+        elif metric_name == 'ew_si_sdr':
             display_name = 'EW-SI-SDR (dB)'
         elif metric_name == 'ew_si_sdr_i':
             display_name = 'EW-SI-SDRi (dB)'
@@ -106,8 +115,6 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
             display_name = 'Confusion Rate (%)'
             mean *= 100  # Convert to percentage
             std *= 100
-        elif metric_name == 'ew_si_sdr_new':
-            display_name = 'EW-SI-SDR New (dB)'
 
         results[display_name] = (mean, std)
 

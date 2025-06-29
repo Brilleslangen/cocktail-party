@@ -113,9 +113,9 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
     totals = {
         "loss": 0.0,
         "ew_mse": 0.0,
-        "ew_sdr": 0.0,
-        "ew_si_sdr": 0.0,
-        "ew_si_sdr_i": 0.0
+        "mc_sdr": 0.0,
+        "mc_si_sdr": 0.0,
+        "mc_si_sdr_i": 0.0
     }
     total_examples = 0
 

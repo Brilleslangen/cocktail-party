@@ -8,8 +8,8 @@ from torch.utils.flop_counter import FlopCounterMode
 
 from torchmetrics.audio import PerceptualEvaluationSpeechQuality, ShortTimeObjectiveIntelligibility
 from binaqual import calculate_binaqual
-from src.evaluate.train_metrics import energy_weighted_si_sdr_i, energy_weighted_si_sdr, energy_weighted_sdr, \
-    per_sample_energy_weighted_sdr
+from src.evaluate.train_metrics import compute_si_sdr_i, compute_SI_SDRs, compute_SDRs, \
+    per_sample_sdr
 from src.evaluate.pkg_funcs import compute_energy_weights, parallel_batch_metric_with_lengths
 
 
@@ -104,7 +104,7 @@ def energy_weighted_estoi(
         lengths: torch.Tensor,
         sample_rate: int = 16000,
         eps: float = 1e-8,
-        n_jobs: int = 0,
+        n_jobs: int = -1,
 ) -> torch.Tensor:
     """
     Compute energy-weighted ESTOI for a batch of variable-length, stereo or multi-channel signals.
@@ -180,7 +180,7 @@ def energy_weighted_pesq(
         sample_rate: int = 16000,
         mode: str = 'wb',
         eps: float = 1e-8,
-        n_jobs: int = 0,
+        n_jobs: int = -1,
 ) -> torch.Tensor:
     """
     Compute energy-weighted PESQ for a batch of variable-length, stereo/multichannel signals.
@@ -216,10 +216,10 @@ def per_sample_binaqual(
     """
     Compute BINAQUAL localisation-similarity for a single stereo sample.
     """
-    # Move to CPU + convert to numpy
-    ref_np = reference.permute(1, 0).contiguous().cpu().float().numpy()  # [L, 2]
-    est_np = estimate.permute(1, 0).contiguous().cpu().float().numpy()  # [L, 2]
-    _, ls = calculate_binaqual(ref_np, est_np)
+    # Energy threshold specifically calibrated for speech
+
+    _, ls = calculate_binaqual(reference.permute(1, 0), estimate.permute(1, 0))
+
     return ls
 
 
@@ -227,7 +227,7 @@ def compute_binaqual(
         estimate: torch.Tensor,  # [B, 2, T]
         reference: torch.Tensor,  # [B, 2, T]
         lengths: torch.Tensor,  # [B]
-        n_jobs: int = 0  # parallelism
+        n_jobs: int = -1  # parallelism
 ) -> torch.Tensor:
     """
     Batched BINAQUAL localisation-similarity for variable-length, stereo signals.
@@ -262,9 +262,9 @@ def per_sample_confusion_rate(
     interferer = mixture - reference
 
     # SDR with target as reference
-    sdr_target = per_sample_energy_weighted_sdr(reference, estimate, eps=eps)
+    sdr_target = per_sample_sdr(reference, estimate, eps=eps)
     # SDR with interferer as reference
-    sdr_interferer = per_sample_energy_weighted_sdr(interferer, estimate, eps=eps)
+    sdr_interferer = per_sample_sdr(interferer, estimate, eps=eps)
 
     return float(sdr_interferer > sdr_target + threshold_db)
 
@@ -276,7 +276,6 @@ def compute_confusion_rate(
         lengths: torch.Tensor,
         threshold_db: float = 0.0,
         eps: float = 1e-8,
-        n_jobs: int = 0,
 ) -> torch.Tensor:
     """
     Compute the confusion rate for a batch of estimated stereo signals in a speech separation setting.
@@ -299,7 +298,6 @@ def compute_confusion_rate(
         lengths:   [B] - Lengths of valid samples for each batch item (for variable-length trimming).
         threshold_db: float - Margin (in dB) by which the interferer SDR must exceed the target SDR to count as confusion.
         eps:        float - Numerical stability term.
-        n_jobs:     int - Degree of parallelism for SDR computation.
 
     Returns:
         confusion: [B] tensor of floats, 1.0 if confused (separated the interferer), else 0.0 for each sample.
@@ -312,14 +310,35 @@ def compute_confusion_rate(
         - This function is batch- and length-aware, supporting variable-length and parallelized SDR computation.
         - Useful for evaluating model robustness against speaker confusion in multi-speaker separation tasks.
     """
+    B = estimate.size(0)
+
     # Compute interferer reference
     interferer = mixture - reference
 
     # Compute SDR for target and interferer
-    sdr_target = energy_weighted_sdr(reference, estimate, lengths, eps=eps)
-    sdr_interferer = energy_weighted_sdr(interferer, estimate, lengths, eps=eps)
+    sdr_target = compute_SDRs(estimate=estimate, reference=reference, lengths=lengths, multi_channel=True, eps=eps)
+    sdr_interferer = compute_SDRs(estimate=estimate, reference=interferer, lengths=lengths, multi_channel=True, eps=eps)
 
-    confusion = (sdr_interferer > sdr_target + threshold_db).float()
+    # Only keep indices where both are not NaN to maintain valid comparisons
+    # valid_mask = (~torch.isnan(sdr_target)) & (~torch.isnan(sdr_interferer))
+    # sdr_target_valid = sdr_target[valid_mask]
+    # sdr_interferer_valid = sdr_interferer[valid_mask]
+
+    confusion = torch.zeros(B, device=estimate.device)
+
+    for b in range(B):
+        # Defensive: check if both SDRs are nan (shouldn't happen if data is valid!)
+        if torch.isnan(sdr_target[b]) and torch.isnan(sdr_interferer[b]):
+            print(f"Sample {b}: Both SDRs are NaN! This should not happen.")
+            confusion[b] = 0.0
+        elif torch.isnan(sdr_interferer[b]):
+            confusion[b] = 0.0  # If interferer SDR is NaN, not confused
+        elif torch.isnan(sdr_target[b]):
+            # This should NOT happen if estimate==reference, but:
+            print(f"Sample {b}: Target SDR is NaN with estimate==reference!")
+            confusion[b] = 0.0  # Or 1.0, but this should be flagged as a data bug
+        else:
+            confusion[b] = float(sdr_interferer[b] > sdr_target[b] + threshold_db)
 
     return confusion
 
@@ -389,11 +408,13 @@ def compute_evaluation_metrics(est: torch.Tensor, mix: torch.Tensor, ref: torch.
         dict with metric names and [B] tensor values
     """
     metrics = {
-        'ew_si_sdr': energy_weighted_si_sdr(est, ref, lengths),
-        'ew_si_sdr_i': energy_weighted_si_sdr_i(est, mix, ref, lengths),
+        'mc_si_sdr': compute_SI_SDRs(est, ref, lengths, multi_channel=True),
+        'mc_si_sdr_i': compute_si_sdr_i(est, mix, ref, lengths, multi_channel=True),
+        'ew_si_sdr': compute_SI_SDRs(est, ref, lengths, multi_channel=False, eps=1e-8),
+        'ew_si_sdr_i': compute_si_sdr_i(est, mix, ref, lengths, multi_channel=False, eps=1e-8),
         'ew_estoi': energy_weighted_estoi(est, ref, lengths, sample_rate),
         'ew_pesq': energy_weighted_pesq(est, ref, lengths, sample_rate),
-        'binaqual': compute_binaqual(est, ref, lengths, n_jobs=-1),
+        'binaqual': compute_binaqual(est, ref, lengths),
         'confusion_rate': compute_confusion_rate(est, mix, ref, lengths)
     }
 

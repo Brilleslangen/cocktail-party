@@ -200,6 +200,7 @@ class TasNet(nn.Module):
         mixture, rest = (mixture, None) if self.streaming_mode else self.pad_signal(mixture)
         # print('rest', rest)
         left, right = mixture[:, 0], mixture[:, 1]
+        original_length = mixture.size(-1)
 
         sp_feats = None
         if self.use_spatial_features:
@@ -241,6 +242,10 @@ class TasNet(nn.Module):
             start, end = hop, -(rest + hop)
             outL = outL[:, :, start:end]  # [B, T]
             outR = outR[:, :, start:end]  # [B, T]
+
+        if not self.streaming_mode:
+            outL = outL[:, :, :original_length]
+            outR = outR[:, :, :original_length]
 
         out = torch.stack([outL.squeeze(1), outR.squeeze(1)], dim=1)
 

@@ -60,6 +60,7 @@ def parallel_batch_metric_with_lengths(
         lengths: torch.Tensor,  # [B]
         n_jobs: int = -1,  # 0=serial, -1=all cores, >0=explicit
         move_to_cpu: bool = False,  # Move to CPU if necessary
+        filter_nans: bool = True,  # Filter out NaN results,
         device: torch.device = None
 ) -> torch.Tensor:
     """
@@ -88,4 +89,10 @@ def parallel_batch_metric_with_lengths(
             for b in range(B)
         )
 
-    return torch.tensor(results, dtype=torch.float32, device=device)
+    # Convert to torch tensor (float32)
+    results_tensor = torch.tensor(results, dtype=torch.float32, device=device)
+    # Keep only non-nan values
+    valid_mask = ~torch.isnan(results_tensor)
+    filtered = results_tensor[valid_mask]
+
+    return filtered if filter_nans else results_tensor
