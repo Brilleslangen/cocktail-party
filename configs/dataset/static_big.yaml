@@ -1,4 +1,4 @@
 # Add datasets here after they are pushed to wandb as artifacts
-artifact_name: "static-2-spk-noise:v9"
+artifact_name: "static-2-spk-noise:latest"
 sample_rate: 16000
 
