@@ -11,6 +11,5 @@ constraint: "h100|a100&gpu80g"
 mem_gb: 20
 timeout_min: 2300 # 25 hours
 
-env:
-  WANDB_ARTIFACT_CACHE_DIR: /cluster/home/nicolts/cocktail-party/artifacts
+
 
