@@ -28,8 +28,9 @@ def per_sample_sdr(
     """
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
     if torch.allclose(reference.float(), estimate.float(), atol=eps):
-        torch.manual_seed(seed)
-        noise = torch.randn_like(estimate) * 1e-6
+        g = torch.Generator(device=estimate.device)
+        g.manual_seed(seed)
+        noise = torch.randn(estimate.shape, generator=g) * 1e-6
         estimate = estimate + noise
 
     if multi_channel:
@@ -91,8 +92,9 @@ def per_sample_SI_SDR(
 
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
     if torch.allclose(reference.float(), estimate.float(), atol=eps):
-        torch.manual_seed(seed)
-        noise = torch.randn_like(estimate) * 1e-6
+        g = torch.Generator(device=estimate.device)
+        g.manual_seed(seed)
+        noise = torch.randn(estimate.shape, generator=g) * 1e-6
         estimate = estimate + noise
 
     if multi_channel:

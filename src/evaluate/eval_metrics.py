@@ -278,7 +278,7 @@ def compute_confusion_rate(
         mixture: torch.Tensor,  # [B, 2, T]
         reference: torch.Tensor,  # [B, 2, T]
         lengths: torch.Tensor,
-        threshold_db: float = 0.0,
+        threshold_db: float = 1.0,
         eps: float = 1e-8,
 ) -> torch.Tensor:
     """
