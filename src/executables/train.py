@@ -287,7 +287,7 @@ def main(cfg: DictConfig):
                 "val/mc_sdr": val_stats["mc_sdr"],
                 "val/mc_si_sdr": val_stats["mc_si_sdr"],
                 "val/mc_si_sdr_i": val_stats["mc_si_sdr_i"],
-                "val/ew_mse": val_stats["em_mse"],
+                "val/ew_mse": val_stats["ew_mse"],
                 "val/ew_sdr": val_stats["ew_sdr"],
                 "val/ew_si_sdr": val_stats["ew_si_sdr"],
                 "val/ew_si_sdr_i": val_stats["ew_si_sdr_i"],
