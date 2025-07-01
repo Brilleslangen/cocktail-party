@@ -3,5 +3,6 @@ name: "ghost"
 
 streaming_mode: ${model_arch.streaming_mode} # whether to use streaming or non-streaming mode
 context_size_ms: ${model_arch.stream_chunk_size_ms}
+pos_enc: false  # Only for transformer
 
 

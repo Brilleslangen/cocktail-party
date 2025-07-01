@@ -26,6 +26,8 @@ class BaseSeparator(SubModule):
             d_ff: int,
             dropout_val: float,
             frames_per_output: int,
+            frames_per_context: int,
+            pos_enc: bool,
             streaming_mode: bool,
             context_size_ms: float,
             name: str,
@@ -44,11 +46,15 @@ class BaseSeparator(SubModule):
         self.context_size_ms = context_size_ms
         self.causal = causal
         self.frames_per_output = frames_per_output
+        self.frames_per_context = frames_per_context
         self.hidden_states = [None] * n_blocks
 
         # Input normalization
         self.input_norm = CausalLayerNorm(input_dim, channel_last=True) if causal else nn.LayerNorm(input_dim)
         self.input_proj = nn.Linear(input_dim, d_model)
+
+        self.positional_encoding = PositionalEncoding(d_model, max_len=self.frames_per_context) if pos_enc else None
+        print('positional encoding:', pos_enc)
 
         print('input dim:', input_dim, 'd_model:', d_model,)
 
@@ -83,6 +89,9 @@ class BaseSeparator(SubModule):
 
         x = self.input_norm(x)
         x = self.input_proj(x)
+
+        if self.positional_encoding:
+            x = self.positional_encoding(x)
 
         # Pass through stacked blocks with residual connections
         # Each block handles its own format and residual mechanic internally
@@ -145,6 +154,9 @@ def build_FFN(d_model: int, d_ff: int, dropout: float) -> nn.Sequential:
 
 
 class ResidualBlock(nn.Module):
+    """
+    Abstract base class for residual blocks used in the separator model.
+    """
     def __init__(self, d_model: int, d_ff: int, dropout_val: float, causal: bool, post_core_gelu: bool, stateful: bool):
         super().__init__()
         self.d_model = d_model
@@ -196,7 +208,30 @@ class ResidualBlock(nn.Module):
         return x, hidden_state
 
 
+class PositionalEncoding(nn.Module):
+    """
+    Positional Encoding module to add positional information to the input. (only for Transformer architectures)
+    """
+    def __init__(self, d_model, max_len=10000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # [1, max_len, d_model]
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        # x shape: [B, T, d_model]
+        x = x + self.pe[:, :x.size(1)]
+        return x
+
+
 class CausalLayerNorm(nn.Module):
+    """
+    Causal Layer Normalization for streaming models.
+    """
     def __init__(self, normalized_shape: int, eps: float = 1e-5, channel_last: bool = True):
         super().__init__()
         self.channel_last = channel_last

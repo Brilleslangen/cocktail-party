@@ -8,6 +8,7 @@ context_size_ms: ${model_arch.stream_chunk_size_ms}
 # Input/output sizes (e.g. 64-dim features, 2 speakers)
 input_dim: 64
 output_dim: 2
+pos_enc: false  # Only for transformer
 
 # Base scaling constants
 scaler: 1.0               # General scaling factor for width

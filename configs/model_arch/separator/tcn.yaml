@@ -19,5 +19,6 @@ causal:           true    # enforce causality in each block
 dilated:          true    # exponential dilation (2^i) in each layer
 causal_proj: true
 dropout_val: 0.1     # dropout rate in the DepthConv1d blocks
+pos_enc: false  # Only for transformer
 
 

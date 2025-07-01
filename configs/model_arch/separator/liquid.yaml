@@ -10,6 +10,7 @@ d_model: ${mul:${model_arch.separator.scaler}, 113}          # Internal model di
 num_neurons: ${mul:${model_arch.separator.d_model}, 5}
 d_ff: ${mul:${model_arch.separator.d_model}, 4}  # Feed-forward dimension
 n_blocks: 5           # Number of liquid blocks
+pos_enc: false  # Only for transformer
 
 dropout_val: 0.1      # Dropout rate
 

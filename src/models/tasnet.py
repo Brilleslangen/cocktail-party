@@ -67,15 +67,19 @@ class TasNet(nn.Module):
         self.frames_per_output = math.ceil((self.output_size + 2 * self.decoder.pad - self.decoder.filter_length)
                                            / self.analysis_hop) + 1  # Only for streaming mode
 
-        # Instantiate separator with computed dims
-        self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim, output_dim=sep_output_dim,
-                                                frames_per_output=self.frames_per_output)
-
         # Streaming params
         self.streaming_mode = streaming_mode  # Size input timespan
-        self.input_size = ms_to_samples(max(window_length_ms, self.separator.context_size_ms), sample_rate)
-        self.sep_context_size = ms_to_samples(self.separator.context_size_ms, sample_rate)  # samples of raw audio
-        self.frames_per_context = int(self.separator.context_size_ms // stride_ms) + 1  # number of input frames
+        self.input_size = ms_to_samples(max(window_length_ms, separator.context_size_ms), sample_rate)
+        self.sep_context_size = ms_to_samples(separator.context_size_ms, sample_rate)  # samples of raw audio
+        self.frames_per_context = int((separator.context_size_ms if streaming_mode else 4000) // stride_ms) + 1
+        # number of input frames with respec to time ^^
+
+        # Instantiate separator with computed dims
+        self.separator: SubModule = instantiate(separator, input_dim=sep_input_dim,
+                                                output_dim=sep_output_dim,
+                                                frames_per_output=self.frames_per_output,
+                                                frames_per_context=self.frames_per_context)
+
         print(f'frames_per_context: {self.frames_per_context}, frames_per_output: {self.frames_per_output}')
 
     def reset_state(self, batch_size: int, chunk_len: int):
@@ -462,4 +466,3 @@ def compute_spatial_features_robust(self, left_waveform: torch.Tensor,
 
     # Use the robust feature extractor
     return self.spatial_feature_extractor(stft_left, stft_right)
-

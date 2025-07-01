@@ -21,7 +21,6 @@ from src.helpers import (
 )
 from src.data.streaming import Streamer
 
-
 def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 optimizer: torch.optim.Optimizer, device: torch.device,
                 use_amp: bool, amp_dtype: torch.dtype):
