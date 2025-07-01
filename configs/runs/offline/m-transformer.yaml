@@ -13,5 +13,5 @@ group: 1-offline
 
 # Adjustments
 model_arch:
-  use_spatial_features: false
+  use_spatial_features: true
   streaming_mode: false

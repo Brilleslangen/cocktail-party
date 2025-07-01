@@ -6,4 +6,5 @@ defaults:
 params:
   batch_size:   4
   num_workers:  12
+  local: true
 

@@ -263,9 +263,9 @@ def main(cfg: DictConfig):
               f"Train Loss: {train_loss:.4f} | "
               f"Train MSE: {train_mse:.4f} | "
               f"Val Loss: {val_stats['loss']:.4f} | "
-              f"EW-SI-SDRi: {val_stats['ew_si_sdr_i']:.2f} dB | "
-              f"EW-SI-SDR: {val_stats['ew_si_sdr']:.2f} dB | "
-              f"EW-SDR: {val_stats['ew_sdr']:.2f} dB")
+              f"MC-SI-SDRi: {val_stats['mc_si_sdr_i']:.2f} dB | "
+              f"MC-SI-SDR: {val_stats['mc_si_sdr']:.2f} dB | "
+              f"MC-SDR: {val_stats['mc_sdr']:.2f} dB")
 
         # Early stopping check
         if val_stats["loss"] < best_val_loss - min_delta:
@@ -284,7 +284,10 @@ def main(cfg: DictConfig):
                 "train/loss": train_loss,
                 "train/mse": train_mse,
                 "val/loss": val_stats["loss"],
-                "val/ew_mse": val_stats["ew_mse"],
+                "val/mc_sdr": val_stats["mc_sdr"],
+                "val/mc_si_sdr": val_stats["mc_si_sdr"],
+                "val/mc_si_sdr_i": val_stats["mc_si_sdr_i"],
+                "val/ew_mse": val_stats["em_mse"],
                 "val/ew_sdr": val_stats["ew_sdr"],
                 "val/ew_si_sdr": val_stats["ew_si_sdr"],
                 "val/ew_si_sdr_i": val_stats["ew_si_sdr_i"],

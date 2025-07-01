@@ -1,10 +1,11 @@
 params:
-  batch_size:   16
+  batch_size:   32
   num_workers:  1
   max_epochs:  100
   n_buckets:   10
   seed:        42
   compile_model: false
+  local: false
 
 optimizer:
   _target_: "torch.optim.AdamW"
@@ -20,7 +21,7 @@ scheduler:
   eta_min:   1e-6
 
 early_stopping:
-  patience: 20
+  patience: 10
   min_delta: 0.0
 
 model_save_dir: "artifacts"
