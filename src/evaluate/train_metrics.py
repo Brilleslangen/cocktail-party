@@ -4,10 +4,18 @@ from src.evaluate.pkg_funcs import parallel_batch_metric_with_lengths, compute_e
 from src.evaluate.loss import masked_mse
 from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio, signal_distortion_ratio
 
+g = torch.Generator()
+g.manual_seed(42)
+
+
+def _perfect_estimate_noising(estimate: torch.Tensor):
+    print(f"randn: {torch.randn((2, 20), generator=g) * 1e-6}")
+    return estimate + torch.randn((2, estimate.size(-1)), generator=g) * 1e-6
+
 
 def per_sample_sdr(
-        reference: torch.Tensor,    # [C, L]
-        estimate: torch.Tensor,     # [C, L]
+        reference: torch.Tensor,  # [C, L]
+        estimate: torch.Tensor,  # [C, L]
         multi_channel: bool = True,
         eps: float = 1e-8,
         seed=42
@@ -28,21 +36,18 @@ def per_sample_sdr(
     """
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
     if torch.allclose(reference.float(), estimate.float(), atol=eps):
-        g = torch.Generator(device=estimate.device)
-        g.manual_seed(seed)
-        noise = torch.randn(estimate.shape, generator=g) * 1e-6
-        estimate = estimate + noise
+        estimate = _perfect_estimate_noising(estimate)
 
     if multi_channel:
         # Flatten channels and time
-        ref_flat = reference.reshape(1, -1)   # [1, C*L]
-        est_flat = estimate.reshape(1, -1)    # [1, C*L]
+        ref_flat = reference.reshape(1, -1)  # [1, C*L]
+        est_flat = estimate.reshape(1, -1)  # [1, C*L]
         sdr = signal_distortion_ratio(est_flat, ref_flat, zero_mean=True)
-        return sdr.squeeze(0)   # scalar
+        return sdr.squeeze(0)  # scalar
     else:
         # Compute energy-weighted SDR
         channel_sdrs = signal_distortion_ratio(
-            estimate.unsqueeze(0),   # [1, C, L]
+            estimate.unsqueeze(0),  # [1, C, L]
             reference.unsqueeze(0),  # [1, C, L]
             zero_mean=True,
         ).squeeze(0)  # [C]
@@ -69,7 +74,7 @@ def compute_SDRs(
 
 def per_sample_SI_SDR(
         reference: torch.Tensor,  # [C, L]
-        estimate: torch.Tensor,   # [C, L]
+        estimate: torch.Tensor,  # [C, L]
         multi_channel: bool = True,
         eps: float = 1e-8,
         seed=42
@@ -92,21 +97,18 @@ def per_sample_SI_SDR(
 
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
     if torch.allclose(reference.float(), estimate.float(), atol=eps):
-        g = torch.Generator(device=estimate.device)
-        g.manual_seed(seed)
-        noise = torch.randn(estimate.shape, generator=g) * 1e-6
-        estimate = estimate + noise
+        estimate = _perfect_estimate_noising(estimate)
 
     if multi_channel:
         # Flatten channels and time (treat as one long signal)
-        ref_flat = reference.reshape(1, -1)   # [1, C*L]
-        est_flat = estimate.reshape(1, -1)    # [1, C*L]
+        ref_flat = reference.reshape(1, -1)  # [1, C*L]
+        est_flat = estimate.reshape(1, -1)  # [1, C*L]
         si_sdr = scale_invariant_signal_distortion_ratio(est_flat, ref_flat, zero_mean=True)
-        return si_sdr.squeeze(0)   # scalar
+        return si_sdr.squeeze(0)  # scalar
     else:
         # Compute energy-weighted SI-SDR
         channel_si_sdrs = scale_invariant_signal_distortion_ratio(
-            estimate.unsqueeze(0),   # [1, C, L]
+            estimate.unsqueeze(0),  # [1, C, L]
             reference.unsqueeze(0),  # [1, C, L]
             zero_mean=True,
         ).squeeze(0)  # [C]
