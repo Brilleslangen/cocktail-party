@@ -1,7 +1,6 @@
 import os
 import time
 
-
 import torch
 import hydra
 import wandb
@@ -20,6 +19,7 @@ from src.helpers import (
     format_time, setup_device_optimizations,
 )
 from src.data.streaming import Streamer
+
 
 def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                 optimizer: torch.optim.Optimizer, device: torch.device,
@@ -96,7 +96,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
         total_loss += loss_val
         total_mse_loss += mse_loss_val
 
-        pbar.set_postfix(avg_loss=f"{(total_loss / (i+1)):.4f}", avg_mse=f"{(total_mse_loss / (i+1)):.4f}")
+        pbar.set_postfix(avg_loss=f"{(total_loss / (i + 1)):.4f}", avg_mse=f"{(total_mse_loss / (i + 1)):.4f}")
 
     return total_loss / len(loader), total_mse_loss / len(loader)
 
@@ -244,24 +244,13 @@ def main(cfg: DictConfig):
     epochs_no_improve = 0
     epochs_trained = 0
 
-    # ---- PRE-TRAIN VALIDATION ----
-    val_stats = validate_epoch(model, val_loader, loss, device, use_amp, amp_dtype)
-    print(f"\n🧪 Pre-training validation (epoch 0):")
-    print(f"   Val Loss: {val_stats['loss']:.4f} | "
-          f"MC-SI-SDRi: {val_stats['mc_si_sdr_i']:.2f} dB | "
-          f"MC-SI-SDR: {val_stats['mc_si_sdr']:.2f} dB | "
-          f"MC-SDR: {val_stats['mc_sdr']:.2f} dB")
+    # ---- PRE-TRAIN init ----
 
     if cfg.wandb.enabled:
         wandb.log({
-            "val/loss": val_stats["loss"],
-            "val/mc_sdr": val_stats["mc_sdr"],
-            "val/mc_si_sdr": val_stats["mc_si_sdr"],
-            "val/mc_si_sdr_i": val_stats["mc_si_sdr_i"],
-            "val/ew_mse": val_stats["ew_mse"],
-            "val/ew_sdr": val_stats["ew_sdr"],
-            "val/ew_si_sdr": val_stats["ew_si_sdr"],
-            "val/ew_si_sdr_i": val_stats["ew_si_sdr_i"],
+            "val/mc_si_sdr_i": 0,
+            "val/ew_si_sdr_i": 0,
+            "learning_rate": optimizer.param_groups[0]["lr"],
             "epoch": 0
         })
     # ---- END PRE-TRAIN VALIDATION ----
