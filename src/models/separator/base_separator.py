@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from abc import abstractmethod
+
+from src.helpers import select_device
 from src.models.submodules import SubModule
 
 
@@ -224,7 +226,7 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # x shape: [B, T, d_model]
-        x = x + self.pe[:, :x.size(1)]
+        x = x + self.pe[:, :x.size(1)].to(x.device)  # Add positional encoding
         return x
 
 
