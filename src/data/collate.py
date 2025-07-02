@@ -22,8 +22,8 @@ def _obtain_dataset_dir(cfg: DictConfig) -> tuple[str | Any, Run | None]:
     artifact_path = os.path.join(artifact_root, artifact.name)
 
     if not os.path.exists(artifact_path):
-        print(f"Not found: {cfg.dataset.artifact_name} in {artifact_root}")
-        dataset_dir = artifact.download(root=artifact_root)
+        os.makedirs(artifact_path, exist_ok=True)
+        dataset_dir = artifact.download(root=artifact_path)
     else:
         dataset_dir = artifact_path
 

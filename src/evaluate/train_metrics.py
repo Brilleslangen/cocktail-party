@@ -4,12 +4,13 @@ from src.evaluate.pkg_funcs import parallel_batch_metric_with_lengths, compute_e
 from src.evaluate.loss import masked_mse
 from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio, signal_distortion_ratio
 
+G = torch.Generator()
+G.manual_seed(42)
+
 
 def _perfect_estimate_noising(estimate: torch.Tensor):
-    g = torch.Generator()
-    g.manual_seed(42)
     # print(f"randn: {torch.randn((2, 20), generator=g) * 1e-6}")
-    return estimate + torch.randn((2, estimate.size(-1)), generator=g) * 1e-6
+    return estimate + torch.randn((2, estimate.size(-1)), generator=G) * 1e-6
 
 
 def per_sample_sdr(
