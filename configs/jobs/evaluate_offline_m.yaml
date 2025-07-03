@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+  - /dataset: static_big         # Dataset selection
+  - /training: default
+  - /wandb: default
+  - _self_
+
+group: 1-offline
+model_artifact: none
+
+wandb:
+  tags: [evaluation]
+
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      model_artifact: m-mamba-offline_5.11M:latest
+

@@ -18,5 +18,5 @@ causal_proj: true
 pos_enc: true  # Use positional encoding
 
 # Attention configuration - FULL ATTENTION MODE
-local_attention: true   # Disable local attention for full sequence attention
+local_attention: false   # Disable local attention for full sequence attention
 attention_window_ms: 34 # Not used when local_attention is false

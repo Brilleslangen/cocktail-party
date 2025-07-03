@@ -233,14 +233,13 @@ def main(cfg: DictConfig):
     train_loader, val_loader = setup_train_dataloaders(cfg)
 
     # Training configuration
-    best_metric_name = "ew_si_sdr_i"
+    best_metric_name = "mc_si_sdr_i"
     best_metric_value = -float("inf")
     best_ckpt_path = f"{cfg.training.model_save_dir}/{run_name}.pt"
 
     # Early stopping setup
     patience = cfg.training.early_stopping.patience
     min_delta = cfg.training.early_stopping.min_delta
-    best_val_loss = float("inf")
     epochs_no_improve = 0
     epochs_trained = 0
 
@@ -277,17 +276,6 @@ def main(cfg: DictConfig):
               f"MC-SI-SDR: {val_stats['mc_si_sdr']:.2f} dB | "
               f"MC-SDR: {val_stats['mc_sdr']:.2f} dB")
 
-        # Early stopping check
-        if val_stats["loss"] < best_val_loss - min_delta:
-            best_val_loss = val_stats["loss"]
-            epochs_no_improve = 0
-        else:
-            epochs_no_improve += 1
-
-        if epochs_no_improve >= patience:
-            print(f"\n⏹️  Early stopping triggered at epoch {epoch}.")
-            break
-
         # Log to wandb
         if cfg.wandb.enabled:
             wandb.log({
@@ -305,9 +293,10 @@ def main(cfg: DictConfig):
                 "epoch": epoch
             })
 
-        # Save checkpoint if best
+        # Early stopping check and best model saving
         current = val_stats[best_metric_name]
         if current > best_metric_value:
+            epochs_no_improve = 0
             best_metric_value = current
             os.makedirs(os.path.dirname(best_ckpt_path), exist_ok=True)
             torch.save({
@@ -319,6 +308,12 @@ def main(cfg: DictConfig):
                 "val_stats": val_stats,
             }, best_ckpt_path)
             print(f"   💾 Saved new best model (EW-SI-SDRi: {current:.2f} dB)")
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= patience:
+            print(f"\n⏹️  Early stopping triggered at epoch {epoch}.")
+            break
 
     # Upload the best model to W&B
     if cfg.wandb.enabled and best_ckpt_path is not None:
