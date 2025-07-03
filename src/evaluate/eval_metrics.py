@@ -94,12 +94,16 @@ def per_sample_energy_weighted_estoi(
         ref_ch = reference[channel_idx].unsqueeze(0)  # [1, L]
         est_ch = estimate[channel_idx].unsqueeze(0)  # [1, L]
 
+        est_ch = est_ch.to(torch.float32)
+        ref_ch = ref_ch.to(torch.float32)
+
         estoi_metric = ShortTimeObjectiveIntelligibility(sample_rate, extended=True)
 
         score = estoi_metric(est_ch, ref_ch).item()
         channel_estoi_scores.append(score)
     channel_weights = compute_energy_weights(reference, mask=None, eps=eps)  # [C]
-    return (channel_weights * torch.tensor(channel_estoi_scores)).sum()
+    return (channel_weights * torch.tensor(channel_estoi_scores, device=channel_weights.device)).sum()
+
 
 
 def energy_weighted_estoi(
@@ -171,10 +175,12 @@ def per_sample_energy_weighted_pesq(
 
         pesq_metric = PerceptualEvaluationSpeechQuality(sample_rate, mode)
 
-        score = pesq_metric(est_ch, ref_ch).item()
+        score = pesq_metric(est_ch.to(torch.float32), ref_ch.to(torch.float32)).item()
+
         channel_pesq_scores.append(score)
     channel_weights = compute_energy_weights(reference, mask=None, eps=eps)  # [C]
-    return (channel_weights * torch.tensor(channel_pesq_scores)).sum()
+    return (channel_weights * torch.tensor(channel_pesq_scores, device=channel_weights.device)).sum()
+
 
 
 def energy_weighted_pesq(
