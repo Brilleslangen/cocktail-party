@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+  - _self_
+  - /runs/offline: m-tcn
+
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      runs/offline: l-tcn, l-mamba, l-liquid, l-transformer, m-tcn, m-mamba, m-liquid, m-transformer, s-tcn, 
+        s-mamba, s-liquid, s-transformer
