@@ -3,9 +3,13 @@ defaults:
   - m-transformer
   - _self_
 
-name: S-${model_arch.name}-offline
+name: L-${model_arch.name}-offline
 
 # Adjustments
 model_arch:
   separator:
-    scaler: 0.45
+    scaler: 2.0
+
+training:
+  params:
+    batch_size:   2

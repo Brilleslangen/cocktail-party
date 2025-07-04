@@ -6,13 +6,13 @@ defaults:
   - /wandb: default
   - _self_
 
-name: m-${model_arch.name}-offline
+name: M-${model_arch.name}-offline
 group: 1-offline
 
 # Adjustments
 model_arch:
   use_spatial_features: true
-  streaming_mode: true
+  streaming_mode: false
 
 training:
   params:

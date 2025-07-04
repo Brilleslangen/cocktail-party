@@ -3,7 +3,7 @@ defaults:
   - m-liquid
   - _self_
 
-name: s-${model_arch.name}-offline
+name: S-${model_arch.name}-offline
 
 # Adjustments
 model_arch:

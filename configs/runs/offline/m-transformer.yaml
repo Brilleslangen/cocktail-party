@@ -7,7 +7,7 @@ defaults:
 
   - override /model_arch/separator: transformer
 
-name: m-${model_arch.name}-offline
+name: S-${model_arch.name}-offline
 group: 1-offline
 
 # Adjustments

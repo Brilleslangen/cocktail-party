@@ -3,9 +3,9 @@ defaults:
   - m-mamba
   - _self_
 
-name: S-${model_arch.name}-offline
+name: L-${model_arch.name}-offline
 
 # Adjustments
 model_arch:
   separator:
-    scaler: 0.45
+    scaler: 2.0
