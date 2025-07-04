@@ -105,7 +105,6 @@ def per_sample_energy_weighted_estoi(
     return (channel_weights * torch.tensor(channel_estoi_scores, device=channel_weights.device)).sum()
 
 
-
 def energy_weighted_estoi(
         estimate: torch.Tensor,  # [B, C, T]
         reference: torch.Tensor,  # [B, C, T]
@@ -180,7 +179,6 @@ def per_sample_energy_weighted_pesq(
         channel_pesq_scores.append(score)
     channel_weights = compute_energy_weights(reference, mask=None, eps=eps)  # [C]
     return (channel_weights * torch.tensor(channel_pesq_scores, device=channel_weights.device)).sum()
-
 
 
 def energy_weighted_pesq(

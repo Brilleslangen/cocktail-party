@@ -1,10 +1,10 @@
 # @package _global_
 defaults:
-  - _self_
   - /model_arch: tasnet            # Architecture selection
   - /dataset: static_big         # Dataset selection
   - /training: default
   - /wandb: default
+  - _self_
 
 name: m-${model_arch.name}-offline
 group: 1-offline
@@ -12,4 +12,8 @@ group: 1-offline
 # Adjustments
 model_arch:
   use_spatial_features: true
-  streaming_mode: false
+  streaming_mode: true
+
+training:
+  params:
+    batch_size: 50
