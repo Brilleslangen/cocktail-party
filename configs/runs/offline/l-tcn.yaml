@@ -9,3 +9,8 @@ name: L-${model_arch.name}-offline
 model_arch:
   separator:
     scaler: 2.0
+
+
+training:
+  params:
+    batch_size: 20
