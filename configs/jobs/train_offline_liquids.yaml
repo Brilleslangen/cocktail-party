@@ -8,4 +8,4 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      runs/offline: m-tcn, m-mamba, m-liquid, m-transformer
+      runs/offline: l-liquid, m-liquid, s-liquid
