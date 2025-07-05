@@ -8,16 +8,15 @@ G = torch.Generator()
 G.manual_seed(42)
 
 
-def _perfect_estimate_noising(estimate: torch.Tensor):
-    # print(f"randn: {torch.randn((2, 20), generator=g) * 1e-6}")
-    return estimate + torch.randn((2, estimate.size(-1)), generator=G) * 1e-6
+def _perfect_estimate_casting(device: torch.device) -> torch.Tensor:
+    return torch.tensor(96.0, device=device)
 
 
 def per_sample_sdr(
         reference: torch.Tensor,  # [C, L]
         estimate: torch.Tensor,  # [C, L]
         multi_channel: bool = True,
-        eps: float = 1e-8,
+        eps: float = 1e-9,
         seed=42
 ) -> torch.Tensor:
     """
@@ -35,10 +34,10 @@ def per_sample_sdr(
         Scalar SDR value for the sample.
     """
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
-    if torch.allclose(reference.float(), estimate.float(), atol=eps):
-        estimate = _perfect_estimate_noising(estimate)
 
-    if multi_channel:
+    if (reference.float() - estimate.float()).sum() == 0:
+        return _perfect_estimate_casting(reference.device)
+    elif multi_channel:
         # Flatten channels and time
         ref_flat = reference.reshape(1, -1)  # [1, C*L]
         est_flat = estimate.reshape(1, -1)  # [1, C*L]
@@ -76,7 +75,7 @@ def per_sample_SI_SDR(
         reference: torch.Tensor,  # [C, L]
         estimate: torch.Tensor,  # [C, L]
         multi_channel: bool = True,
-        eps: float = 1e-8,
+        eps: float = 1e-7,
         seed=42
 ) -> torch.Tensor:
     """
@@ -96,10 +95,9 @@ def per_sample_SI_SDR(
         raise ValueError("Reference signal is all zeros, cannot compute SI-SDR.")
 
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
-    if torch.allclose(reference.float(), estimate.float(), atol=eps):
-        estimate = _perfect_estimate_noising(estimate)
-
-    if multi_channel:
+    if (reference.float() - estimate.float()).sum() == 0:
+        return _perfect_estimate_casting(reference.device)
+    elif multi_channel:
         # Flatten channels and time (treat as one long signal)
         ref_flat = reference.reshape(1, -1)  # [1, C*L]
         est_flat = estimate.reshape(1, -1)  # [1, C*L]
