@@ -26,7 +26,7 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
         # ----------------------------------------
         # Load model checkpoint from artifact
         # ----------------------------------------
-        artifact_dir = cfg.training.model_save_dir  # e.g. './artifacts'
+        artifact_dir = './artifacts'
         artifact_path = os.path.join(artifact_dir, artifact_name)
         state = torch.load(artifact_path, map_location=device)
         if 'cfg' not in state or 'model_state' not in state:
