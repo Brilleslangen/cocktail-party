@@ -3,4 +3,4 @@ defaults:
   - _self_
   - /runs/offline: l-tcn
 
-publish_model: L-conv-offline_19.88M
+publish_model: L-conv-offline_19.88M.pt
