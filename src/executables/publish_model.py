@@ -7,6 +7,7 @@ from hydra.utils import instantiate
 from src.helpers import select_device, prettify_macs, prettify_param_count
 from src.evaluate import count_parameters, count_macs
 
+
 ######################################################################
 # Utility
 ######################################################################
@@ -112,8 +113,6 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
     print(f"🚀 Published '{run_name}'  |  params: {pretty_params}, macs: {pretty_macs}")
 
 
-
-
 ######################################################################
 # Hydra entry-point
 ######################################################################
@@ -122,7 +121,11 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def main(cfg: DictConfig):
     """Publish **exactly one** untrained model: whatever `cfg.model_arch` is."""
-    build_and_publish(cfg)
+    if hasattr(cfg, 'publish_model'):
+        artifact_name = cfg.publish_model
+        build_and_publish(cfg, artifact_name)
+    else:
+        build_and_publish(cfg)
 
 
 if __name__ == "__main__":
