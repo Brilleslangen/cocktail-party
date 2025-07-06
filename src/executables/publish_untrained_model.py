@@ -12,17 +12,37 @@ from src.evaluate import count_parameters, count_macs
 ######################################################################
 
 
-def build_and_publish(cfg: DictConfig):
+def build_and_publish(cfg: DictConfig, artifact_name: str = None):
     """
-    Instantiates `model_cfg`, computes stats, writes a tiny checkpoint,
-    and publishes it as a W&B model artifact.
+    Publishes a (possibly pre-trained) model as a W&B model artifact.
+    If `artifact_name` is provided, loads model and config from artifact path.
+    Otherwise, builds a new model as specified in cfg.
     """
     device = select_device()
-    model = instantiate(cfg.model_arch).to(device)
+    model, model_cfg = None, None
 
-    # ------------------------------------------------------------------
+    if artifact_name is not None:
+        # ----------------------------------------
+        # Load model checkpoint from artifact
+        # ----------------------------------------
+        artifact_dir = cfg.training.model_save_dir  # e.g. './artifacts'
+        artifact_path = os.path.join(artifact_dir, artifact_name)
+        state = torch.load(artifact_path, map_location=device)
+        if 'cfg' not in state or 'model_state' not in state:
+            raise ValueError("❌ Checkpoint missing 'cfg' or 'model_state'.")
+        model_cfg = state['cfg']['model_arch']
+        model = instantiate(model_cfg, device=device).to(device)
+        model.load_state_dict(state['model_state'])
+    else:
+        # ----------------------------------------
+        # Build new model from config
+        # ----------------------------------------
+        model_cfg = cfg.model_arch
+        model = instantiate(model_cfg).to(device)
+
+    # ----------------------------------------
     # Stats
-    # ------------------------------------------------------------------
+    # ----------------------------------------
     try:
         param_count = count_parameters(model)
         macs = count_macs(model)
@@ -37,9 +57,9 @@ def build_and_publish(cfg: DictConfig):
 
     run_name = f"{cfg.name}_{pretty_params}" if pretty_params != "-" else cfg.name
 
-    # ------------------------------------------------------------------
+    # ----------------------------------------
     # W&B run
-    # ------------------------------------------------------------------
+    # ----------------------------------------
     run = wandb.init(
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
@@ -54,26 +74,29 @@ def build_and_publish(cfg: DictConfig):
     run.summary["model/param_count"] = pretty_params
     run.summary["model/macs_per_second"] = pretty_macs
     run.summary["model/macs_pretty"] = pretty_macs
-    run.summary["trained"] = False
+    run.summary["trained"] = artifact_name is not None
 
-    # ------------------------------------------------------------------
-    # Save checkpoint (tiny – may even be empty)
-    # ------------------------------------------------------------------
+    # ----------------------------------------
+    # Save checkpoint (to temp dir)
+    # ----------------------------------------
     ckpt_dir = cfg.training.model_save_dir
     os.makedirs(ckpt_dir, exist_ok=True)
     ckpt_path = os.path.join(ckpt_dir, f"{run_name}.pt")
 
+    # Always use artifact_cfg if loaded, else cfg
+    model_cfg_for_ckpt = model_cfg if model_cfg is not None else OmegaConf.to_container(cfg.model_arch, resolve=True)
+
     torch.save(
         {
-            "cfg": {"model_arch": OmegaConf.to_container(cfg.model_arch, resolve=True)},
-            "model_state": model.state_dict(),  # {} for oracle models
+            "cfg": {"model_arch": model_cfg_for_ckpt},
+            "model_state": model.state_dict(),
         },
         ckpt_path,
     )
 
-    # ------------------------------------------------------------------
+    # ----------------------------------------
     # Publish artifact
-    # ------------------------------------------------------------------
+    # ----------------------------------------
     art = wandb.Artifact(run_name, type="model")
     art.add_file(ckpt_path)
     art.metadata.update(
@@ -87,6 +110,8 @@ def build_and_publish(cfg: DictConfig):
     run.finish()
 
     print(f"🚀 Published '{run_name}'  |  params: {pretty_params}, macs: {pretty_macs}")
+
+
 
 
 ######################################################################

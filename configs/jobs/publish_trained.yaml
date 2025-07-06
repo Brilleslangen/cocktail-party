@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - _self_
+  - /runs/offline: l-tcn
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      runs/baselines: L-conv-offline_19.88M
