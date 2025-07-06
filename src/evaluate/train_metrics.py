@@ -8,8 +8,8 @@ G = torch.Generator()
 G.manual_seed(42)
 
 
-def _perfect_estimate_casting(device: torch.device) -> torch.Tensor:
-    return torch.tensor(96.0, device=device)
+def _perfect_estimate_noise(estimate: torch.Tensor, device: torch.device) -> torch.Tensor:
+    return estimate + torch.randn(estimate.shape, generator=G, device=device) * 1e-6
 
 
 def per_sample_sdr(
@@ -36,8 +36,9 @@ def per_sample_sdr(
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
 
     if (reference.float() - estimate.float()).sum() == 0:
-        return _perfect_estimate_casting(reference.device)
-    elif multi_channel:
+        estimate = _perfect_estimate_noise(estimate, reference.device)
+
+    if multi_channel:
         # Flatten channels and time
         ref_flat = reference.reshape(1, -1)  # [1, C*L]
         est_flat = estimate.reshape(1, -1)  # [1, C*L]
@@ -96,8 +97,9 @@ def per_sample_SI_SDR(
 
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
     if (reference.float() - estimate.float()).sum() == 0:
-        return _perfect_estimate_casting(reference.device)
-    elif multi_channel:
+        estimate = _perfect_estimate_noise(estimate, reference.device)
+
+    if multi_channel:
         # Flatten channels and time (treat as one long signal)
         ref_flat = reference.reshape(1, -1)  # [1, C*L]
         est_flat = estimate.reshape(1, -1)  # [1, C*L]

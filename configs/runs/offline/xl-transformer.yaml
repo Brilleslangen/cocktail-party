@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - m-transformer
+  - _self_
+
+name: XL-${model_arch.name}-offline
+
+# Adjustments
+model_arch:
+  separator:
+    scaler: 9.0
+
+training:
+  params:
+    batch_size: 70

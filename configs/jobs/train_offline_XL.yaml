@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - _self_
+  - /runs/offline: m-tcn
+
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      runs/offline: xl-mamba, xl-transformer

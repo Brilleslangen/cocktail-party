@@ -317,7 +317,20 @@ def main(cfg: DictConfig):
 
     # Run evaluation
     print("\n🧪 Running evaluation...")
-    results = evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype)
+    if hasattr(cfg, 'num_runs') and cfg.num_runs > 1:
+        print(f"🔁 Running {cfg.num_runs} runs for stability...")
+        run_results = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype)
+                       for _ in range(cfg.num_runs)]
+        # Average results across runs
+        results = {}
+        for key in run_results[0].keys():
+            means = [torch.as_tensor(result[key][0]).float() for result in run_results]
+            stds = [torch.as_tensor(result[key][1]).float() for result in run_results]
+            mean = torch.stack(means).mean()
+            std = torch.stack(stds).mean()
+            results[key] = (mean.item(), std.item())
+    else:
+        results = evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype)
 
     # Format results
     value_table, std_table = format_results_table(results, pretty_params, pretty_macs)
