@@ -12,4 +12,4 @@ model_arch:
 
 training:
   params:
-    batch_size: 70
+    batch_size: 40
