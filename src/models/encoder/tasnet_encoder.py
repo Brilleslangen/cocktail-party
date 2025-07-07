@@ -10,7 +10,7 @@ class TasNetEncoder(SubModule):
     """
 
     def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool,
-                 relu: bool = False):
+                 prelu: bool = False):
         super().__init__()
         self.in_channels = 1
         self.num_filters = num_filters
@@ -28,7 +28,7 @@ class TasNetEncoder(SubModule):
             bias=False
         )
 
-        self.relu = nn.ReLU() if relu else None  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
+        self.prelu = nn.PReLU() if prelu else None  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -37,16 +37,12 @@ class TasNetEncoder(SubModule):
         if x.dim() == 2:
             x = x.unsqueeze(1)  # [B, 1, T]
 
-        # Input checks
-        # print("[Encoder] Input NaNs:", torch.isnan(x).any().item(), "| Max:", x.max().item(), "| Min:", x.min().item())
-
         # Conv1d
         out = self.conv1d(x)
-        # print("[Encoder] Conv1d Output NaNs:", torch.isnan(out).any().item(), "| Max:", out.max().item(), "| Min:", out.min().item())
 
         # ReLU
-        if self.relu is not None:
-            out = self.relu(out)
+        if self.prelu is not None:
+            out = self.prelu(out)
 
         return out
 

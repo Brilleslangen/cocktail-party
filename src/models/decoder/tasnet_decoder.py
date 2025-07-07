@@ -15,7 +15,7 @@ class TasNetDecoder(SubModule):
       1) 1-D ConvTranspose1d from N channels back to 1 channel
       2) Overlap-add automatically handled by stride and padding
     """
-    def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool):
+    def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool, prelu: bool = False):
         """
         Initialize the ConvTranspose1d layer for waveform reconstruction.
 
@@ -43,6 +43,7 @@ class TasNetDecoder(SubModule):
             padding=self.pad,
             bias=False
         )
+        self.prelu = nn.PReLU() if prelu else None
 
     def forward(self, w: torch.Tensor) -> torch.Tensor:
         """
@@ -54,7 +55,10 @@ class TasNetDecoder(SubModule):
         Returns:
             torch.Tensor: Reconstructed waveform [B, 1, T_samples].
         """
-        return self.deconv1d(w)
+        out = self.deconv1d(w)
+        if self.prelu is not None:
+            out = self.prelu(out)
+        return out
 
     def get_input_dim(self) -> int:
         """Return the number of input channels (num_filters)."""

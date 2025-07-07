@@ -18,4 +18,6 @@ model_arch:
   use_targets_as_input: true
   streaming_mode: false
   encoder:
-    relu: true
+    prelu: false
+  decoder:
+    prelu: false
