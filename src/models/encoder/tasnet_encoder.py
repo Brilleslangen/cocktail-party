@@ -9,7 +9,8 @@ class TasNetEncoder(SubModule):
     Time-domain analysis filterbank (Conv-TasNet encoder).
     """
 
-    def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool):
+    def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool,
+                 relu: bool = False):
         super().__init__()
         self.in_channels = 1
         self.num_filters = num_filters
@@ -27,7 +28,7 @@ class TasNetEncoder(SubModule):
             bias=False
         )
 
-        # self.relu = nn.ReLU()  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
+        self.relu = nn.ReLU() if relu else None  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -44,8 +45,8 @@ class TasNetEncoder(SubModule):
         # print("[Encoder] Conv1d Output NaNs:", torch.isnan(out).any().item(), "| Max:", out.max().item(), "| Min:", out.min().item())
 
         # ReLU
-        # out = self.relu(out)
-        # print("[Encoder] ReLU Output NaNs:", torch.isnan(out).any().item(), "| Max:", out.max().item(), "| Min:", out.min().item())
+        if self.relu is not None:
+            out = self.relu(out)
 
         return out
 

@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - /model_arch: tasnet          # Architecture selection
+  - /dataset: static_big         # Dataset selection
+  - /training: default
+  - /wandb: default
+  - _self_
+
+  - override /model_arch/separator: ghost
+
+name: ${model_arch.name}-targets-offline-relu
+group: 0-baselines
+
+# Adjustments
+model_arch:
+  no_separator: true
+  use_spatial_features: false
+  use_targets_as_input: true
+  streaming_mode: false
+  encoder:
+    relu: true
