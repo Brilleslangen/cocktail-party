@@ -10,7 +10,7 @@ class TasNetEncoder(SubModule):
     """
 
     def __init__(self, num_filters: int, filter_length_ms: int, stride_ms: int, sample_rate: int, causal: bool,
-                 prelu: bool = False):
+                 use_prely: bool = False):
         super().__init__()
         self.in_channels = 1
         self.num_filters = num_filters
@@ -28,7 +28,7 @@ class TasNetEncoder(SubModule):
             bias=False
         )
 
-        self.prelu = nn.PReLU() if prelu else None  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
+        self.prelu = nn.PReLU() if use_prely else None  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

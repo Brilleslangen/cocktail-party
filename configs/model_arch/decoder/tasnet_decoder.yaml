@@ -4,4 +4,4 @@ filter_length_ms: ${model_arch.filter_length_ms}  # filter length in ms (64 filt
 stride_ms: ${model_arch.stride_ms}
 sample_rate: ${model_arch.sample_rate}
 causal: true                                     # causal convolution
-prelu: false
+use_prelu: false

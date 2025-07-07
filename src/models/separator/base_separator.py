@@ -67,7 +67,7 @@ class BaseSeparator(SubModule):
         self.stateful = self.blocks[0].stateful if n_blocks > 0 else False
 
         # Output projection
-        self.output_proj = nn.Sequential(nn.PReLU(), nn.Linear(d_model, output_dim))
+        self.output_proj = nn.Sequential(nn.PReLU(), nn.Linear(d_model, output_dim), nn.ReLU())
 
     @abstractmethod
     def _build_block(self, block_idx: int) -> nn.Module:
