@@ -24,14 +24,13 @@ class TasNet(nn.Module):
     def __init__(self, encoder: DictConfig, decoder: DictConfig, separator: DictConfig, sample_rate: int,
                  window_length_ms: float, stride_ms: float, streaming_mode: bool, stream_chunk_size_ms: float,
                  filter_length_ms, use_targets_as_input: bool, use_spatial_features: bool, no_separator: bool,
-                 device: torch.device, mask_scale: float,  **kwargs: Any):
+                 device: torch.device, **kwargs: Any):
         super().__init__()
 
         self.no_separator = no_separator  # Encoder decoder identity evaluation
         self.use_targets_as_input = use_targets_as_input  # Use target as input for training
         self.sample_rate = sample_rate  # Sample rate in Hz
         self.device = device
-        self.mask_scale = mask_scale  # Scale factor for masks
 
         # -------------------------------------------------------------------
         # Instantiate encoder and decoder from their Hydra configs
