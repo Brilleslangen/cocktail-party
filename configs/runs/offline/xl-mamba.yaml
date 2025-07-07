@@ -9,6 +9,7 @@ name: XL-${model_arch.name}-offline
 model_arch:
   separator:
     scaler: 5.0
+    n_blocks: 8
 
 
 training:
