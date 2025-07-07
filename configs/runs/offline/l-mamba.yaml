@@ -8,4 +8,5 @@ name: L-${model_arch.name}-offline
 # Adjustments
 model_arch:
   separator:
-    scaler: 2.0
+    scaler: 5.0
+    n_blocks: 5
