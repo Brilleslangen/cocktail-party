@@ -34,7 +34,7 @@ class Streamer:
         self.buffer = torch.roll(self.buffer, shifts=-self.chunk_size, dims=-1)  # roll buffer left by chunk_size
         self.buffer[:, :, -self.chunk_size:] = new_chunk  # store new audio at the right
         out = self.model(self.buffer)  # [B, C, chunk_size]
-        return out
+        return out.cpu()
 
     def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.LongTensor,
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:

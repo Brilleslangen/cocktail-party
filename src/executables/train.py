@@ -42,7 +42,8 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
     pbar = tqdm(loader, total=len(loader), desc="Train", leave=False)
 
     for i, (mix, refs, lengths) in enumerate(pbar):
-        mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
+        if not streaming_mode:
+            mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
         model_input = refs if use_targets_as_input else mix
         B, C, T = mix.shape
 
@@ -60,6 +61,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
             with torch.amp.autocast('cuda', dtype=amp_dtype):
                 if streaming_mode:
                     ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
+                    ests, refs, lengths = ests.to(device), refs.to(device), lengths.to(device)
                 else:
                     ests = model(model_input)
 
