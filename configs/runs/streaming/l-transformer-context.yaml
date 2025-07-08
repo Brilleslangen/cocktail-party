@@ -1,24 +1,10 @@
 # @package _global_
 defaults:
-  - /model_arch: tasnet            # Architecture selection
-  - /dataset: static_small         # Dataset selection
-  - /training: default
-  - /wandb: default
-  - /inference: default
+  - l-transformer-chunk
   - _self_
 
-  - override /model_arch/separator: transformer
-
+# adjustments
 name: $L-{model_arch.separator.name}-${model_arch.name}-streaming-context
-group: 4-streaming
 
 model_arch:
-  streaming_mode: true
-  encoder:
-    causal: true
-  decoder:
-    causal: true
-  separator:
-    scaler: 1.0
-    causal_proj: true
-    context_size_ms: ${model_arch.stream_chunk_size_ms}
+    context_size_ms: 34.0
