@@ -43,7 +43,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
 
     for i, (mix, refs, lengths) in enumerate(pbar):
         if streaming_mode:
-            mix, refs, lengths = mix.cpu(), refs.cput(), lengths.cpu()
+            mix, refs, lengths = mix.cpu(), refs.cpu(), lengths.cpu()
             model_input = refs if use_targets_as_input else mix
             B, C, T = mix.shape
         else:
