@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - _self_
-  - /runs/offline: m-tcn
+  - /runs/streaming: l-mamba-chunk
 
 
 hydra:
