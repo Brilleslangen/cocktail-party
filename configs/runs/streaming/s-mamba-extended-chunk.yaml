@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
-  - l-transformer-chunk
+  - s-transformer-chunk
   - _self_
 
   - override /model_arch/separator: mamba
 
 # adjustments
-name: L-${model_arch.separator.name}-${model_arch.name}-streaming-extended-chunk
+name: S-${model_arch.separator.name}-streaming-extended-chunk
 
 model_arch:
   separator:

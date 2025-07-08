@@ -1,10 +1,10 @@
 # @package _global_
 defaults:
-  - l-transformer-chunk
+  - s-transformer-chunk
   - _self_
 
 # adjustments
-name: L-${model_arch.separator.name}-${model_arch.name}-streaming-context
+name: S-${model_arch.separator.name}-streaming-context
 
 model_arch:
     separator:
