@@ -50,8 +50,7 @@ def setup_train_dataloaders(cfg: DictConfig) -> tuple[DataLoader, DataLoader]:
 
     train_dir = os.path.join(dataset_dir, "train")
     val_dir = os.path.join(dataset_dir, "val")
-    pin_memory = using_cuda() and not cfg.model_arch.streaming_mode
-    print(f"Using pin_memory={not cfg.model_arch.streaming_mode} for DataLoaders")
+    pin_memory = using_cuda()
 
     train_ds = AudioDataset(train_dir, cfg.dataset.sample_rate)
     val_ds = AudioDataset(val_dir, cfg.dataset.sample_rate)
@@ -98,7 +97,7 @@ def setup_test_dataloader(cfg: DictConfig) -> DataLoader:
 
     test_dir = os.path.join(dataset_dir, "test")
     test_ds = AudioDataset(test_dir, cfg.dataset.sample_rate)
-    pin_memory = using_cuda() and not cfg.model_arch.streaming_mode
+    pin_memory = using_cuda()
 
     # compute raw lengths (in samples) for bucketing
     test_lengths = [torchaudio.info(p).num_frames for p in test_ds.mix_files]

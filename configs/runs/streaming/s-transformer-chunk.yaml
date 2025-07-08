@@ -22,3 +22,7 @@ model_arch:
     scaler: 0.45
     causal_proj: true
     context_size_ms: ${model_arch.stream_chunk_size_ms}
+
+training:
+  params:
+    max_epochs: 30

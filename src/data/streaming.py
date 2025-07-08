@@ -32,9 +32,9 @@ class Streamer:
           [B, C, chunk_size] regardless if buffer is filled or not.
         """
         self.buffer = torch.roll(self.buffer, shifts=-self.chunk_size, dims=-1)  # roll buffer left by chunk_size
-        self.buffer[:, :, -self.chunk_size:] = new_chunk.to(self.device)  # store new audio at the right
+        self.buffer[:, :, -self.chunk_size:] = new_chunk  # store new audio at the right
         out = self.model(self.buffer)  # [B, C, chunk_size]
-        return out.cpu()
+        return out
 
     def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.LongTensor,
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:
