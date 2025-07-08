@@ -33,7 +33,7 @@ class BaseSeparator(SubModule):
             streaming_mode: bool,
             context_size_ms: float,
             name: str,
-            causal: bool = True,
+            causal: bool,
             **kwargs
     ):
         super().__init__()
