@@ -66,6 +66,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
             with torch.amp.autocast('cuda', dtype=amp_dtype):
                 if streaming_mode:
                     ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
+                    ests, refs, lengths = ests.to(device), refs.to(device), lengths.to(device)
                 else:
                     ests = model(model_input)
 
