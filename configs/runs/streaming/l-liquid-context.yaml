@@ -6,4 +6,4 @@ defaults:
   - override /model_arch/separator: liquid
 
 # adjustments
-name: L-${model_arch.separator.name}-${model_arch.name}-streaming-context
+name: L-${model_arch.name}-streaming-context

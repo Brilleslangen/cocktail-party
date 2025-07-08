@@ -32,23 +32,26 @@ class Streamer:
           [B, C, chunk_size] regardless if buffer is filled or not.
         """
         self.buffer = torch.roll(self.buffer, shifts=-self.chunk_size, dims=-1)  # roll buffer left by chunk_size
-        self.buffer[:, :, -self.chunk_size:] = new_chunk  # store new audio at the right
+        self.buffer[:, :, -self.chunk_size:] = new_chunk.to(self.device)  # store new audio at the right
         out = self.model(self.buffer)  # [B, C, chunk_size]
-        return out
+        return out.cpu()
 
     def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.LongTensor,
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:
+        # Send to cpu to alleviate GPU memory pressure
+        mix_batch = mix_batch.cpu()
+        refs = refs.cpu()
+
         B, C, T = mix_batch.shape
+        T_out = T - self.pad_warmup if trim_warmup else T
 
         # Reinitialize buffer
         self.reset(batch_size=B, channels=C)
 
-        out_chunks = []
-        for chunk in iter_chunks(mix_batch, self.chunk_size):
+        out_full = mix_batch.new_zeros(B, C, T_out)
+        for i, chunk in enumerate(iter_chunks(mix_batch, self.chunk_size)):
             est = self.push(chunk)
-            out_chunks.append(est)
-
-        out_full = torch.cat(out_chunks, dim=-1)
+            out_full[..., i * self.chunk_size:(i + 1) * self.chunk_size] = est[..., :self.chunk_size]
 
         ref_trimmed = refs[..., self.pad_warmup:] if trim_warmup else refs
         est_trimmed = (out_full[..., self.pad_warmup:T] if trim_warmup else out_full[..., :T])
