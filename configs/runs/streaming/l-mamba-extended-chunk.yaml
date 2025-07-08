@@ -9,4 +9,5 @@ defaults:
 name: $L-{model_arch.separator.name}-${model_arch.name}-streaming-extended-chunk
 
 model_arch:
+  separator:
     context_size_ms: 6.0

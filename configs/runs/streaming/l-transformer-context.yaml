@@ -7,4 +7,5 @@ defaults:
 name: $L-{model_arch.separator.name}-${model_arch.name}-streaming-context
 
 model_arch:
-    context_size_ms: 34.0
+    separator:
+      context_size_ms: 34.0
