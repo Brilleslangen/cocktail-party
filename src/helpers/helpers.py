@@ -6,6 +6,7 @@ OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
 
 
 def select_device() -> torch.device:
+    return torch.device('cpu')    
     if torch.backends.mps.is_available():
         return torch.device("mps")
     elif torch.cuda.is_available():
