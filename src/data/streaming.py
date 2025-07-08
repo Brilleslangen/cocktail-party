@@ -38,23 +38,17 @@ class Streamer:
 
     def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.LongTensor,
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:
-        # Send to cpu to alleviate GPU memory pressure
-        mix_batch = mix_batch.cpu()
-        refs = refs.cpu()
-
         B, C, T = mix_batch.shape
-        T_out = T - self.pad_warmup if trim_warmup else T
 
         # Reinitialize buffer
         self.reset(batch_size=B, channels=C)
 
-        out_full = mix_batch.new_zeros(B, C, T_out)
-        for i, chunk in enumerate(iter_chunks(mix_batch, self.chunk_size)):
+        out_chunks = []
+        for chunk in iter_chunks(mix_batch, self.chunk_size):
             est = self.push(chunk)
-            start = i * self.chunk_size
-            end = min(start + self.chunk_size, T_out)
-            length = end - start
-            out_full[..., start:end] = est[..., :length]
+            out_chunks.append(est)
+
+        out_full = torch.cat(out_chunks, dim=-1)
 
         ref_trimmed = refs[..., self.pad_warmup:] if trim_warmup else refs
         est_trimmed = (out_full[..., self.pad_warmup:T] if trim_warmup else out_full[..., :T])
