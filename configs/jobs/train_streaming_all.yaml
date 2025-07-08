@@ -8,5 +8,5 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      runs/streaming: l-conv-chunk, l-transformer-chunk, l-mamba-chunk, l-liquid-chunk, l-conv-context, 
-        l-transformer-context, l-mamba-context, l-liquid-context, l-mamba-extended-chunk
+      runs/streaming: l-mamba-chunk, l-liquid-chunk, l-transformer-chunk, l-transformer-context, l-mamba-context, 
+        l-liquid-context, l-mamba-extended-chunk, l-conv-chunk, l-conv-context

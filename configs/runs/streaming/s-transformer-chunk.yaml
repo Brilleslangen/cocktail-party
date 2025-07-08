@@ -26,3 +26,4 @@ model_arch:
 training:
   params:
     max_epochs: 30
+    batch_size: 256
