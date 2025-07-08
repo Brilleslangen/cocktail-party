@@ -51,7 +51,8 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
     with torch.no_grad():
         for mix, refs, lengths in tqdm(test_loader, desc="Evaluating", leave=False):
-            mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
+            if not streaming_mode:
+                mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
             model_input = refs if use_targets_as_input else mix
             B, C, T = mix.shape
 
@@ -64,6 +65,7 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
                 with torch.amp.autocast('cuda', dtype=amp_dtype):
                     if streaming_mode:
                         ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
+                        ests, refs, lengths = ests.to(device), refs.to(device), lengths.to(device)
                         mix = mix[..., streamer.pad_warmup:]
                     else:
                         ests = model(model_input)

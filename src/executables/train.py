@@ -125,7 +125,8 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
 
     with torch.no_grad():
         for mix, refs, lengths in tqdm(loader, desc="Validate", leave=False):
-            mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
+            if not streaming_mode:
+                mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
             model_input = refs if model.use_targets_as_input else mix
             B, C, T = mix.shape
 
@@ -143,7 +144,8 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
                 with torch.amp.autocast('cuda', dtype=amp_dtype):
                     if streaming_mode:
                         ests, refs, lengths = streamer.stream_batch(model_input, refs, lengths, trim_warmup=True)
-                        mix = mix[..., streamer.pad_warmup:]
+                        ests, refs, lengths = ests.to(device), refs.to(device), lengths.to(device)
+                        mix = mix[..., streamer.pad_warmup:].to(device)
                     else:
                         ests = model(model_input)
                     loss = criterion(ests, refs, lengths)
