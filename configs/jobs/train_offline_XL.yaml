@@ -8,4 +8,4 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      runs/offline: l-mamba
+      runs/offline: l-transformer
