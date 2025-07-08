@@ -51,7 +51,10 @@ class Streamer:
         out_full = mix_batch.new_zeros(B, C, T_out)
         for i, chunk in enumerate(iter_chunks(mix_batch, self.chunk_size)):
             est = self.push(chunk)
-            out_full[..., i * self.chunk_size:(i + 1) * self.chunk_size] = est[..., :self.chunk_size]
+            start = i * self.chunk_size
+            end = min(start + self.chunk_size, T_out)
+            length = end - start
+            out_full[..., start:end] = est[..., :length]
 
         ref_trimmed = refs[..., self.pad_warmup:] if trim_warmup else refs
         est_trimmed = (out_full[..., self.pad_warmup:T] if trim_warmup else out_full[..., :T])
