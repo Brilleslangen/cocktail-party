@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - m-mamba
+  - _self_
+
+name: L-${model_arch.name}-offline-bidirect
+
+# Adjustments
+model_arch:
+  encoder:
+    causal: false
+  decoder:
+    causal: false
+  separator:
+    scaler: 2.0
+    causal_proj: false
