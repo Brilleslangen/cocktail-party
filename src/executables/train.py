@@ -42,10 +42,15 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
     pbar = tqdm(loader, total=len(loader), desc="Train", leave=False)
 
     for i, (mix, refs, lengths) in enumerate(pbar):
-        if not streaming_mode:
+        if streaming_mode:
+            lengths = lengths.to(device)  # Lengths are small, OK to move
+            model_input = refs if use_targets_as_input else mix
+            B, C, T = mix.shape
+        else:
+            # Normal mode - move everything to GPU
             mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
-        model_input = refs if use_targets_as_input else mix
-        B, C, T = mix.shape
+            model_input = refs if use_targets_as_input else mix
+            B, C, T = mix.shape
 
         if use_targets_as_input:
             # Assert that targets and references are the same

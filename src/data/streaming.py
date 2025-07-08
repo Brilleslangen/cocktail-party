@@ -25,37 +25,77 @@ class Streamer:
         """Zero the ring‐buffer and reset any model state."""
         self.buffer = torch.zeros(batch_size, channels, self.buffer_size, device=self.device)
 
-    def push(self, new_chunk: Tensor) -> Optional[Tensor]:
+    def push(self, new_chunk: Tensor) -> Tensor:
         """
-        new_chunk: [B, C, chunk_size]
+        Process a chunk that's currently on CPU.
+
+        Args:
+            new_chunk: [B, C, chunk_size] on CPU
+
         Returns:
-          [B, C, chunk_size] regardless if buffer is filled or not.
+            [B, C, chunk_size] on CPU
         """
-        self.buffer = torch.roll(self.buffer, shifts=-self.chunk_size, dims=-1)  # roll buffer left by chunk_size
-        self.buffer[:, :, -self.chunk_size:] = new_chunk.to(self.device)  # store new audio at the right
+        # Move only this chunk to GPU
+        chunk_gpu = new_chunk.to(self.device)
+
+        # Update buffer (on GPU)
+        self.buffer = torch.roll(self.buffer, shifts=-self.chunk_size, dims=-1)
+        self.buffer[:, :, -self.chunk_size:] = chunk_gpu
+
+        # Process through model (on GPU)
         out = self.model(self.buffer)  # [B, C, chunk_size]
+
+        # Immediately move output back to CPU to free GPU memory
         return out.cpu()
 
     def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.LongTensor,
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:
+        """
+        Stream process a batch, keeping only chunks on GPU.
+
+        Args:
+            mix_batch: [B, C, T] - should be on CPU
+            refs: [B, C, T] - should be on CPU
+            lengths: [B] - should be on CPU
+
+        Returns:
+            All outputs on GPU (moved back at the end)
+        """
         B, C, T = mix_batch.shape
 
-        # Reinitialize buffer
+        # Ensure input is on CPU
+        if mix_batch.is_cuda:
+            mix_batch = mix_batch.cpu()
+        if refs.is_cuda:
+            refs = refs.cpu()
+
+        # Initialize buffer on GPU
         self.reset(batch_size=B, channels=C)
 
+        # Process chunks, accumulating on CPU
         out_chunks = []
         for chunk in iter_chunks(mix_batch, self.chunk_size):
-            est = self.push(chunk)
+            # chunk is on CPU, push handles GPU transfer
+            est = self.push(chunk)  # Returns CPU tensor
             out_chunks.append(est)
 
-        out_full = torch.cat(out_chunks, dim=-1)
+        # Concatenate on CPU
+        out_full = torch.cat(out_chunks, dim=-1)  # Still on CPU
 
-        ref_trimmed = refs[..., self.pad_warmup:] if trim_warmup else refs
-        est_trimmed = (out_full[..., self.pad_warmup:T] if trim_warmup else out_full[..., :T])
+        # Trim if needed (still on CPU)
+        if trim_warmup:
+            ref_trimmed = refs[..., self.pad_warmup:]
+            est_trimmed = out_full[..., self.pad_warmup:T]
+            lengths_trimmed = lengths - self.pad_warmup
+        else:
+            ref_trimmed = refs
+            est_trimmed = out_full[..., :T]
+            lengths_trimmed = lengths
 
-        lengths_trimmed = lengths - self.pad_warmup  # Check this later when we mask and sum
-
-        return est_trimmed.to(self.device), ref_trimmed.to(self.device), lengths_trimmed.to(self.device)
+        # Move final results to GPU only at the end
+        return (est_trimmed.to(self.device),
+                ref_trimmed.to(self.device),
+                lengths_trimmed.to(self.device))
 
 
 def iter_chunks(batch: Tensor, chunk_size: int):
