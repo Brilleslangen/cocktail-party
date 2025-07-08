@@ -7,3 +7,7 @@ defaults:
 
 # adjustments
 name: S-${model_arch.separator.name}-streaming-context
+
+training:
+    params:
+        batch_size: 10
