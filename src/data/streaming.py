@@ -55,7 +55,7 @@ class Streamer:
 
         lengths_trimmed = lengths - self.pad_warmup  # Check this later when we mask and sum
 
-        return est_trimmed, ref_trimmed, lengths_trimmed
+        return est_trimmed.to(self.device), ref_trimmed.to(self.device), lengths_trimmed.to(self.device)
 
 
 def iter_chunks(batch: Tensor, chunk_size: int):
