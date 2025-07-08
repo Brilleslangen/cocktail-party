@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 # adjustments
-name: $L-{model_arch.separator.name}-${model_arch.name}-streaming-context
+name: L-${model_arch.separator.name}-${model_arch.name}-streaming-context
 
 model_arch:
     separator:

@@ -6,7 +6,7 @@ defaults:
   - override /model_arch/separator: mamba
 
 # adjustments
-name: $L-{model_arch.separator.name}-${model_arch.name}-streaming-extended-chunk
+name: L-${model_arch.separator.name}-${model_arch.name}-streaming-extended-chunk
 
 model_arch:
   separator:

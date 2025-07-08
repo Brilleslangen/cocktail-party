@@ -9,7 +9,7 @@ defaults:
 
   - override /model_arch/separator: transformer
 
-name: $L-{model_arch.separator.name}-${model_arch.name}-streaming-chunk
+name: L-${model_arch.separator.name}-${model_arch.name}-streaming-chunk
 group: 4-streaming
 
 model_arch:
