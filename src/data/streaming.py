@@ -6,93 +6,91 @@ from torch import Tensor
 
 
 class Streamer:
-    def __init__(self, model: torch.nn.Module):
-        """
-        model: your TasNet (or other) separator.
-          Must define model.analysis_window (buffer_len) and model.analysis_hop (chunk_size).
-          Must accept inputs of shape [B, C, buffer_len] and output [B, C, chunk_size].
-        """
+    def __init__(self, model: torch.nn.Module, use_pinned_memory: bool = True):
         self.model = model
         self.buffer_size = getattr(model, "input_size", None)
         self.chunk_size = getattr(model, "output_size", None)
         if not self.buffer_size or not self.chunk_size:
             raise ValueError("Model must define context size and chunk size")
-        self.buffer: Optional[Tensor] = None
         self.pad_warmup = self.buffer_size - self.chunk_size
-        self.device = model.device
+        self.device = next(model.parameters()).device
+        self.use_pinned = use_pinned_memory and torch.cuda.is_available()
+
+        # Pre-allocate pinned memory buffers for faster transfers
+        if self.use_pinned:
+            self.chunk_buffer = None  # Will be allocated on first use
+            self.output_buffer = None
 
     def reset(self, batch_size: int, channels: int):
-        """Zero the ring‐buffer and reset any model state."""
+        """Initialize GPU buffer and optionally pinned memory buffers."""
         self.buffer = torch.zeros(batch_size, channels, self.buffer_size, device=self.device)
 
+        if self.use_pinned and self.chunk_buffer is None:
+            # Allocate pinned memory for faster CPU-GPU transfers
+            self.chunk_buffer = torch.zeros(batch_size, channels, self.chunk_size,
+                                            pin_memory=True)
+            self.output_buffer = torch.zeros(batch_size, channels, self.chunk_size,
+                                             pin_memory=True)
+
     def push(self, new_chunk: Tensor) -> Tensor:
-        """
-        Process a chunk that's currently on CPU.
+        """Process chunk with optimized memory transfers."""
+        if self.use_pinned:
+            # Copy to pinned memory first (non-blocking)
+            self.chunk_buffer.copy_(new_chunk, non_blocking=True)
+            chunk_gpu = self.chunk_buffer.to(self.device, non_blocking=True)
+        else:
+            chunk_gpu = new_chunk.to(self.device)
 
-        Args:
-            new_chunk: [B, C, chunk_size] on CPU
-
-        Returns:
-            [B, C, chunk_size] on CPU
-        """
-        # Move only this chunk to GPU
-        chunk_gpu = new_chunk.to(self.device)
-
-        # Update buffer (on GPU)
+        # Update buffer
         self.buffer = torch.roll(self.buffer, shifts=-self.chunk_size, dims=-1)
         self.buffer[:, :, -self.chunk_size:] = chunk_gpu
 
-        # Process through model (on GPU)
-        out = self.model(self.buffer)  # [B, C, chunk_size]
+        # Process
+        with torch.cuda.amp.autocast(enabled=False):  # Disable if not needed
+            out = self.model(self.buffer)
 
-        # Immediately move output back to CPU to free GPU memory
-        return out.cpu()
+        if self.use_pinned:
+            # Use pinned memory for output transfer
+            self.output_buffer.copy_(out, non_blocking=True)
+            torch.cuda.synchronize()  # Ensure transfer completes
+            return self.output_buffer.clone()
+        else:
+            return out.cpu()
 
     def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.LongTensor,
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:
-        """
-        Stream process a batch, keeping only chunks on GPU.
-
-        Args:
-            mix_batch: [B, C, T] - should be on CPU
-            refs: [B, C, T] - should be on CPU
-            lengths: [B] - should be on CPU
-
-        Returns:
-            All outputs on GPU (moved back at the end)
-        """
+        """Same as Streamer but with pinned memory optimization."""
         B, C, T = mix_batch.shape
 
-        # Ensure input is on CPU
-        if mix_batch.is_cuda:
-            mix_batch = mix_batch.cpu()
-        if refs.is_cuda:
-            refs = refs.cpu()
+        # Move to CPU if needed
+        mix_cpu = mix_batch.cpu() if mix_batch.is_cuda else mix_batch
+        refs_cpu = refs.cpu() if refs.is_cuda else refs
 
-        # Initialize buffer on GPU
         self.reset(batch_size=B, channels=C)
 
-        # Process chunks, accumulating on CPU
-        out_chunks = []
-        for chunk in iter_chunks(mix_batch, self.chunk_size):
-            # chunk is on CPU, push handles GPU transfer
-            est = self.push(chunk)  # Returns CPU tensor
-            out_chunks.append(est)
+        # Pre-allocate output tensor on CPU
+        n_chunks = (T + self.chunk_size - 1) // self.chunk_size
+        out_full = torch.zeros(B, C, n_chunks * self.chunk_size,
+                               pin_memory=self.use_pinned)
 
-        # Concatenate on CPU
-        out_full = torch.cat(out_chunks, dim=-1)  # Still on CPU
+        # Process chunks
+        chunk_idx = 0
+        for chunk in iter_chunks(mix_cpu, self.chunk_size):
+            est = self.push(chunk)
+            out_full[..., chunk_idx * self.chunk_size:(chunk_idx + 1) * self.chunk_size] = est
+            chunk_idx += 1
 
-        # Trim if needed (still on CPU)
+        # Trim
         if trim_warmup:
-            ref_trimmed = refs[..., self.pad_warmup:]
+            ref_trimmed = refs_cpu[..., self.pad_warmup:]
             est_trimmed = out_full[..., self.pad_warmup:T]
             lengths_trimmed = lengths - self.pad_warmup
         else:
-            ref_trimmed = refs
+            ref_trimmed = refs_cpu
             est_trimmed = out_full[..., :T]
             lengths_trimmed = lengths
 
-        # Move final results to GPU only at the end
+        # Final GPU transfer
         return (est_trimmed.to(self.device),
                 ref_trimmed.to(self.device),
                 lengths_trimmed.to(self.device))
