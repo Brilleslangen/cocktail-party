@@ -9,12 +9,15 @@ defaults:
 
   - override /model_arch/separator: transformer
 
-name: ${model_arch.separator.name}-${model_arch.name}-offline
+name: $L-{model_arch.separator.name}-${model_arch.name}-streaming
 group: 4-streaming
 
 model_arch:
   streaming_mode: true
-  causal: false
-
+  encoder:
+    causal: false
+  decoder:
+    causal: false
   separator:
-    scaler: 8
+    scaler: 2.0
+    causal_proj: false

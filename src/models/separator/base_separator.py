@@ -59,6 +59,7 @@ class BaseSeparator(SubModule):
         print('positional encoding:', pos_enc)
 
         print('input dim:', input_dim, 'd_model:', d_model,)
+        print('causal mode:', causal)
 
         # Stacked separator blocks
         self.blocks = nn.ModuleList([

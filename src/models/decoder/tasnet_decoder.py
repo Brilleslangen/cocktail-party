@@ -44,6 +44,7 @@ class TasNetDecoder(SubModule):
             bias=False
         )
         self.prelu = nn.PReLU() if use_prelu else None
+        print('decoder causal', causal)
 
     def forward(self, w: torch.Tensor) -> torch.Tensor:
         """

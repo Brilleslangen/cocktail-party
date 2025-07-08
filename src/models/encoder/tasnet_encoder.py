@@ -29,6 +29,7 @@ class TasNetEncoder(SubModule):
         )
 
         self.prelu = nn.PReLU() if use_prelu else None  # Paper "Ultra-Low Latency Speech Enhancement - A Comprehensive Study"
+        print('encoder causal', causal)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
