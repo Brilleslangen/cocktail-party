@@ -9,15 +9,16 @@ defaults:
 
   - override /model_arch/separator: transformer
 
-name: $L-{model_arch.separator.name}-${model_arch.name}-streaming
+name: $L-{model_arch.separator.name}-${model_arch.name}-streaming-chunk
 group: 4-streaming
 
 model_arch:
   streaming_mode: true
   encoder:
-    causal: false
+    causal: true
   decoder:
-    causal: false
+    causal: true
   separator:
-    scaler: 2.0
-    causal_proj: false
+    scaler: 1.0
+    causal_proj: true
+    context_size_ms: ${model_arch.stream_chunk_size_ms}

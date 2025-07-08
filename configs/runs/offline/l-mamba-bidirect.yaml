@@ -13,4 +13,4 @@ model_arch:
     causal: false
   separator:
     scaler: 2.0
-    causal: false
+    causal_proj: false
