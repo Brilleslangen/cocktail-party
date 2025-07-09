@@ -17,7 +17,6 @@ def select_device() -> torch.device:
 def setup_device_optimizations(cfg: DictConfig):
     """Configure device-specific optimizations."""
     device = select_device()
-    print(device)
     if cfg.training.params.cpu:
         device = torch.device("cpu")
         print("Using CPU for training.")
