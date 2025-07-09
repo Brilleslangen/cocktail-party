@@ -115,6 +115,11 @@ class MambaBlock(ResidualBlock):
                         out_frame = self.mamba(frame, inference_params=state)
                         outputs.append(out_frame)
 
+                        if self.curr_position < 100:
+                            print('pos', self.curr_position, 'shape',
+                                  state.key_value_memory_dict[self.layer_idx][0].shape,
+                                  state.key_value_memory_dict[self.layer_idx][0])
+
                         # Update offset for next frame
                         state.seqlen_offset += 1
 
@@ -123,10 +128,6 @@ class MambaBlock(ResidualBlock):
 
                     self.curr_position += self.chunk_len  # Increment position by chunk length due to buf roll
 
-                    if self.curr_position < 100:
-                        print('pos', self.curr_position, 'shape', state.key_value_memory_dict[self.layer_idx][0].shape,
-                              state.key_value_memory_dict[self.layer_idx][0])
-                    
                     return out, state
                 else:
                     # No state - offline processing
