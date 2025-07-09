@@ -61,7 +61,6 @@ class MambaSeparator(BaseSeparator):
             causal=self.causal,
             chunk_len=self.frames_per_output,
             layer_idx=block_idx,
-            chunk_len=self.frames_per_output
         )
 
 
@@ -69,7 +68,7 @@ class MambaBlock(ResidualBlock):
     """Single Mamba-2 block used inside the separator."""
 
     def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int, headdim: int,
-                 d_ff: int, dropout_val: float, causal: bool, chunk_len: int, layer_idx: int, chunk_len=None,
+                 d_ff: int, dropout_val: float, causal: bool, chunk_len: int, layer_idx: int,
                  **kwargs):
         self.d_state = d_state
         self.headdim = headdim
@@ -77,7 +76,6 @@ class MambaBlock(ResidualBlock):
         self.expand = expand
         self.chunk_len = chunk_len
         self.layer_idx = layer_idx
-        self.chunk_len = chunk_len
         super().__init__(d_model, d_ff, dropout_val, causal,
                          post_core_gelu=False, stateful=True)
 
@@ -111,6 +109,9 @@ class MambaBlock(ResidualBlock):
                     outputs = []
 
                     state.seqlen_offset = self.curr_position
+
+                    if self.curr_position < 100:
+                        print(state.key_value_memory_dict[self.layer_idx][0].shape)
 
                     for t in range(T):
                         frame = x[:, t:t+1, :]
