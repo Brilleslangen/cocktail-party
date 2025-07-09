@@ -60,7 +60,8 @@ class MambaSeparator(BaseSeparator):
             dropout_val=self.dropout_val,
             causal=self.causal,
             chunk_len=self.frames_per_output,
-            layer_idx=block_idx
+            layer_idx=block_idx,
+            chunk_len=self.frames_per_output
         )
 
 
@@ -68,7 +69,7 @@ class MambaBlock(ResidualBlock):
     """Single Mamba-2 block used inside the separator."""
 
     def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int, headdim: int,
-                 d_ff: int, dropout_val: float, causal: bool, chunk_len: int, layer_idx: int,
+                 d_ff: int, dropout_val: float, causal: bool, chunk_len: int, layer_idx: int, chunk_len=None,
                  **kwargs):
         self.d_state = d_state
         self.headdim = headdim
@@ -76,12 +77,13 @@ class MambaBlock(ResidualBlock):
         self.expand = expand
         self.chunk_len = chunk_len
         self.layer_idx = layer_idx
+        self.chunk_len = chunk_len
         super().__init__(d_model, d_ff, dropout_val, causal,
                          post_core_gelu=False, stateful=True)
 
     def _build_core_layer(self) -> nn.Module:
         class MambaWrapper(nn.Module):
-            def __init__(self, d_model, d_state, d_conv, headdim, expand, layer_idx):
+            def __init__(self, d_model, d_state, d_conv, headdim, expand, layer_idx, chunk_len):
                 super().__init__()
                 self.mamba = Mamba2(
                     d_model=d_model,
@@ -92,6 +94,8 @@ class MambaBlock(ResidualBlock):
                     layer_idx=layer_idx,
                 )
                 self.layer_idx = layer_idx
+                self.chunk_len = chunk_len if chunk_len is not None else 0
+                self.curr_position = 0  # Track current position in the sequence
 
             def build_fresh_state(self, batch_size: int, max_seqlen: int):  # Check layer_idx
                 conv_state, ssm_state = self.mamba.allocate_inference_cache(batch_size, max_seqlen)
@@ -103,23 +107,29 @@ class MambaBlock(ResidualBlock):
 
             def forward(self, x, state=None):
                 if state is not None:
-                    # Process the 3-token chunk normally
-                    # Mamba2 will handle state updates internally
-                    kvm_before = tuple(t.clone() for t in state.key_value_memory_dict[self.layer_idx])
-                    out = self.mamba(x, inference_params=state)
-                    kvm_after = tuple(t.clone() for t in state.key_value_memory_dict[self.layer_idx])
+                    B, T, D = x.shape  # [batch, time, features]
+                    outputs = []
 
-                    # Check if state has been updated
-                    if any(not torch.equal(b, a) for b, a in zip(kvm_before, kvm_after)):
-                        print(f"State updated for layer {self.layer_idx}")
+                    state.seqlen_offset = self.curr_position
 
-                    # Update seqlen_offset for next chunk
-                    state.seqlen_offset += out.size(1)  # Add 3 to offset
+                    for t in range(T):
+                        frame = x[:, t:t+1, :]
+                        out_frame = self.mamba(frame, inference_params=state)
+                        outputs.append(out_frame)
 
+                        # Update offset for next frame
+                        state.seqlen_offset += 1
+
+                    # Concatenate outputs: [B, T, D]
+                    out = torch.cat(outputs, dim=1)
+
+                    self.curr_position += self.chunk_len  # Increment position by chunk length due to buf roll
+                    
                     return out, state
                 else:
                     # No state - offline processing
                     out = self.mamba(x)
                     return out, None
 
-        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand, self.layer_idx)
+        return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand, self.layer_idx, 
+                            self.chunk_len)
