@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
-  - s-transformer-chunk
+  - s-transformer-asym
   - _self_
 
   - override /model_arch/separator: liquid
 
 # adjustments
-name: S-${model_arch.separator.name}-streaming-chunk
+name: S-${model_arch.name}-streaming-asym
 
 training:
     params:

@@ -9,7 +9,7 @@ defaults:
 
   - override /model_arch/separator: transformer
 
-name: S-${model_arch.name}-streaming-chunk
+name: S-${model_arch.name}-streaming-sym
 group: 4-streaming
 
 model_arch:
@@ -19,7 +19,7 @@ model_arch:
   decoder:
     causal: false
   separator:
-    scaler: 2.0
+    scaler: 0.45
     causal_proj: false
     context_size_ms: ${model_arch.stream_chunk_size_ms}
 

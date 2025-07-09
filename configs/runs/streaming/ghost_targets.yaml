@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - s-transformer-sym
+  - _self_
+
+  - override /model_arch/separator: ghost
+
+name: ${model_arch.name}-targets-offline
+group: streaming
+
+# Adjustments
+model_arch:
+  no_separator: true
+  use_spatial_features: false
+  use_targets_as_input: true

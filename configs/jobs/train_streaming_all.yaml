@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
   - _self_
-  - /runs/streaming: s-mamba-chunk
+  - /runs/streaming: s-mamba-sym
 
 
 hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      runs/streaming: s-mamba-chunk, s-liquid-chunk, s-transformer-chunk, s-transformer-context, s-mamba-context, 
-        s-liquid-context, s-mamba-extended-chunk, s-conv-chunk, s-conv-context
+      runs/streaming: ghost_targets, s-mamba-sym, s-liquid-sym, s-transformer-sym, s-transformer-asym, s-mamba-asym, 
+        s-liquid-asym, s-mamba-short-asym, s-conv-sym, s-conv-asym

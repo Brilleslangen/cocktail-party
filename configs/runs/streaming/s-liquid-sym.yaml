@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
-  - s-transformer-context
+  - s-transformer-sym
   - _self_
 
   - override /model_arch/separator: liquid
 
 # adjustments
-name: S-${model_arch.name}-streaming-context
+name: S-${model_arch.separator.name}-streaming-sym
 
 training:
     params:

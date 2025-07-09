@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
-  - s-transformer-chunk
+  - s-transformer-sym
   - _self_
 
   - override /model_arch/separator: tcn
 
 # adjustments
-name: S-${model_arch.separator.name}-streaming-chunk
+name: S-${model_arch.separator.name}-streaming-sym
 
 training:
     params:

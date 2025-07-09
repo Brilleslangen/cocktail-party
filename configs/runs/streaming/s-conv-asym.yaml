@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
-  - s-transformer-context
+  - s-transformer-asym
   - _self_
 
   - override /model_arch/separator: tcn
 
 # adjustments
-name: S-${model_arch.separator.name}-streaming-context
+name: S-${model_arch.separator.name}-streaming-asym
 
 training:
     params:
