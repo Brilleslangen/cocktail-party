@@ -15,14 +15,14 @@ group: 4-streaming
 model_arch:
   streaming_mode: true
   encoder:
-    causal: true
+    causal: false
   decoder:
-    causal: true
+    causal: false
   separator:
-    scaler: 0.45
-    causal_proj: true
+    scaler: 2.0
+    causal_proj: false
     context_size_ms: ${model_arch.stream_chunk_size_ms}
 
 training:
   params:
-    batch_size: 110
+    batch_size: 70

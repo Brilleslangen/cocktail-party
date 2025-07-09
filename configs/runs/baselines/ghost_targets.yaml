@@ -17,3 +17,10 @@ model_arch:
   use_spatial_features: false
   use_targets_as_input: true
   streaming_mode: false
+
+  encoder:
+    causal: false
+  decoder:
+    causal: false
+  separator:
+    causal_proj: false

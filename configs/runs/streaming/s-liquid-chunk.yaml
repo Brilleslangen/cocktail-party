@@ -10,4 +10,4 @@ name: S-${model_arch.separator.name}-streaming-chunk
 
 training:
     params:
-        batch_size: 1
+        batch_size: 70

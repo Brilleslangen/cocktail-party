@@ -8,4 +8,5 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      publish_model: S-liquid-offline_1.08M.pt, M-liquid-offline_5.10M.pt
+      publish_model: S-transformer-streaming-context_1.08M.pt, S-transformer-streaming-chunk_1.08M.pt, S-mamba-streaming-extended-chunk_1.10M.pt,
+        S-mamba-streaming-chunk_1.10M.pt, S-liquid-streaming-chunk_1.04M.pt
