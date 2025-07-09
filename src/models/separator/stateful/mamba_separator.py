@@ -101,6 +101,7 @@ class MambaBlock(ResidualBlock):
 
             def forward(self, x, state=None):
                 if state is not None:
+                    print(f"state is not none")
                     return self.mamba(x, inference_params=state), state
                 out = self.mamba(x)
                 return out, None

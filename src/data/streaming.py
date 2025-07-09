@@ -47,9 +47,6 @@ class Streamer:
 
         out_full = torch.zeros(B, C, T)
         for i, chunk in enumerate(iter_chunks(mix_batch, self.chunk_size)):
-            if hasattr(self.model.separator, 'hidden_states'):
-                print(f"States before chunk {i}: {[s is not None for s in self.model.separator.hidden_states]}")
-
             est = self.push(chunk)
             start = i * self.chunk_size
             end = min(start + self.chunk_size, T)
