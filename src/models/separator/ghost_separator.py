@@ -23,3 +23,6 @@ class GhostSeparator:
         self.pos_enc = pos_enc
         self.stateful = True
         self.name = name
+
+    def reset_state(self, batch_size, chunk_len, dtype):
+        pass
