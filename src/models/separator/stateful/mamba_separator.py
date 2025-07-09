@@ -90,20 +90,29 @@ class MambaBlock(ResidualBlock):
                     expand=expand,
                     layer_idx=layer_idx,
                 )
+                self.layer_idx = layer_idx
 
-            def build_fresh_state(self, batch_size: int, chunk_len: int, layer_idx: int):
-                conv_state, ssm_state = self.mamba.allocate_inference_cache(batch_size, chunk_len)
+            def build_fresh_state(self, batch_size: int, max_seqlen: int, layer_idx: int):  # Check layer_idx
+                conv_state, ssm_state = self.mamba.allocate_inference_cache(batch_size, max_seqlen)
                 inference_params = SimpleNamespace(
                     key_value_memory_dict={layer_idx: (conv_state, ssm_state)},
-                    seqlen_offset=0
+                    seqlen_offset=0  # Start from 0 for chunk processing
                 )
                 return inference_params
 
             def forward(self, x, state=None):
                 if state is not None:
-                    print(f"state is not none")
-                    return self.mamba(x, inference_params=state), state
-                out = self.mamba(x)
-                return out, None
+                    # Process the 3-token chunk normally
+                    # Mamba2 will handle state updates internally
+                    out = self.mamba(x, inference_params=state)
+
+                    # Update seqlen_offset for next chunk
+                    state.seqlen_offset += x.size(1)  # Add 3 to offset
+
+                    return out, state
+                else:
+                    # No state - offline processing
+                    out = self.mamba(x)
+                    return out, None
 
         return MambaWrapper(self.d_model, self.d_state, self.d_conv, self.headdim, self.expand, self.layer_idx)

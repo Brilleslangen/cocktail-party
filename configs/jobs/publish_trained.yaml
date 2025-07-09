@@ -1,6 +1,11 @@
 # @package _global_
 defaults:
   - _self_
-  - /runs/offline: l-tcn
 
-publish_model: L-conv-offline_19.88M.pt
+publish_model: null
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      publish_model: S-liquid-offline_1.08M.pt, M-liquid-offline_5.10M.pt
