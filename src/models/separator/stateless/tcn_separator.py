@@ -72,7 +72,7 @@ class TCNSeparator(SubModule):
             nn.Conv1d(bn_dim, output_dim, kernel_size=1)  # add streaming stride for time downsampling
         )
 
-    def reset_state(self):
+    def reset_state(self, batch_size: int, chunk_len: int, dtype=None):
         """
         should do nothing, as TCN is stateless.
         """

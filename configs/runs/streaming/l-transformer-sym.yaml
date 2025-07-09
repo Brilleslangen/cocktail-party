@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - s-transformer-sym
+  - _self_
+
+  - override /model_arch/separator: transformer
+
+# adjustments
+name: L-${model_arch.separator.name}-streaming-sym
+
+training:
+    params:
+        batch_size: 70
+
+model_arch:
+  separator:
+    scaler: 2.0
+
