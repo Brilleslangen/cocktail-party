@@ -35,7 +35,8 @@ def per_sample_sdr(
     """
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
 
-    if (reference.float() - estimate.float()).sum() == 0:
+    # This is a workaround for the case when the reference and estimate are identical,
+    if torch.allclose(reference, estimate, atol=1e-8):
         estimate = _perfect_estimate_noise(estimate, reference.device)
 
     if multi_channel:
@@ -96,7 +97,7 @@ def per_sample_SI_SDR(
         raise ValueError("Reference signal is all zeros, cannot compute SI-SDR.")
 
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
-    if (reference.float() - estimate.float()).sum() == 0:
+    if torch.allclose(reference, estimate, atol=1e-8):
         estimate = _perfect_estimate_noise(estimate, reference.device)
 
     if multi_channel:
