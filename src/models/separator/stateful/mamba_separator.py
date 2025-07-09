@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import torch
 import torch.nn as nn
 from mamba_ssm import Mamba2
 from src.models.separator.base_separator import BaseSeparator, ResidualBlock
@@ -101,16 +102,15 @@ class MambaBlock(ResidualBlock):
                 return inference_params
 
             def forward(self, x, state=None):
-                import copy
                 if state is not None:
                     # Process the 3-token chunk normally
                     # Mamba2 will handle state updates internally
-                    state_before = copy.deepcopy(state)
+                    kvm_before = state.key_value_memory_dict[self.layer_idx].clone()
                     out = self.mamba(x, inference_params=state)
-                    state_after = copy.deepcopy(state)
+                    kvm_after = state.key_value_memory_dict[self.layer_idx].clone()
 
                     # Check if state has been updated
-                    if state_before.key_value_memory_dict[self.layer_idx] != state_after.key_value_memory_dict[self.layer_idx]:
+                    if not torch.equal(kvm_before, kvm_after):
                         print(f"State updated for layer {self.layer_idx}")
 
                     # Update seqlen_offset for next chunk
