@@ -111,7 +111,7 @@ class MambaBlock(ResidualBlock):
                     state.seqlen_offset = self.curr_position
 
                     if self.curr_position < 100:
-                        print(state.key_value_memory_dict[self.layer_idx][0].shape)
+                        print('pos', self.curr_position, state.key_value_memory_dict[self.layer_idx][0])
 
                     for t in range(T):
                         frame = x[:, t:t+1, :]
