@@ -105,12 +105,12 @@ class MambaBlock(ResidualBlock):
                 if state is not None:
                     # Process the 3-token chunk normally
                     # Mamba2 will handle state updates internally
-                    kvm_before = state.key_value_memory_dict[self.layer_idx].clone()
+                    kvm_before = tuple(t.clone() for t in state.key_value_memory_dict[self.layer_idx])
                     out = self.mamba(x, inference_params=state)
-                    kvm_after = state.key_value_memory_dict[self.layer_idx].clone()
+                    kvm_after = tuple(t.clone() for t in state.key_value_memory_dict[self.layer_idx])
 
                     # Check if state has been updated
-                    if not torch.equal(kvm_before, kvm_after):
+                    if any(not torch.equal(b, a) for b, a in zip(kvm_before, kvm_after)):
                         print(f"State updated for layer {self.layer_idx}")
 
                     # Update seqlen_offset for next chunk
