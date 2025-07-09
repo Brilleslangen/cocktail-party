@@ -92,10 +92,10 @@ class MambaBlock(ResidualBlock):
                 )
                 self.layer_idx = layer_idx
 
-            def build_fresh_state(self, batch_size: int, max_seqlen: int, layer_idx: int):  # Check layer_idx
+            def build_fresh_state(self, batch_size: int, max_seqlen: int):  # Check layer_idx
                 conv_state, ssm_state = self.mamba.allocate_inference_cache(batch_size, max_seqlen)
                 inference_params = SimpleNamespace(
-                    key_value_memory_dict={layer_idx: (conv_state, ssm_state)},
+                    key_value_memory_dict={self.layer_idx: (conv_state, ssm_state)},
                     seqlen_offset=0  # Start from 0 for chunk processing
                 )
                 return inference_params
@@ -104,10 +104,16 @@ class MambaBlock(ResidualBlock):
                 if state is not None:
                     # Process the 3-token chunk normally
                     # Mamba2 will handle state updates internally
+                    state_before = state.copy()
                     out = self.mamba(x, inference_params=state)
+                    state_after = state.copy()
+
+                    # Check if state has been updated
+                    if state_before.key_value_memory_dict[self.layer_idx] != state_after.key_value_memory_dict[self.layer_idx]:
+                        print(f"State updated for layer {self.layer_idx}")
 
                     # Update seqlen_offset for next chunk
-                    state.seqlen_offset += x.size(1)  # Add 3 to offset
+                    state.seqlen_offset += out.size(1)  # Add 3 to offset
 
                     return out, state
                 else:
