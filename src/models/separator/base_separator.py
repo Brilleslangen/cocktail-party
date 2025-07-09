@@ -118,7 +118,7 @@ class BaseSeparator(SubModule):
         """Reset all hidden states."""
         if hasattr(self.blocks[0].core, 'build_fresh_state'):
             print('fresh state')
-            self.hidden_states = [self.blocks[i].core.build_fresh_state(batch_size, chunk_len, i) for i in
+            self.hidden_states = [self.blocks[i].core.build_fresh_state(batch_size, chunk_len) for i in
                                   range(self.n_blocks)]
         else:
             self.hidden_states = [None] * self.n_blocks
