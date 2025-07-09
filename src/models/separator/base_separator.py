@@ -114,7 +114,7 @@ class BaseSeparator(SubModule):
 
         return x.transpose(1, 2)  # [B, output_dim, T_out]
 
-    def reset_state(self, batch_size: int, chunk_len: int):
+    def reset_state(self, batch_size: int, chunk_len: int, dtype=None):
         """Reset all hidden states."""
         if hasattr(self.blocks[0].core, 'build_fresh_state'):
             print('fresh state')

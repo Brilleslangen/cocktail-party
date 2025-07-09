@@ -95,8 +95,8 @@ class MambaBlock(ResidualBlock):
                 self.chunk_len = chunk_len if chunk_len is not None else 0
                 self.curr_position = 0  # Track current position in the sequence
 
-            def build_fresh_state(self, batch_size: int, max_seqlen: int):  # Check layer_idx
-                conv_state, ssm_state = self.mamba.allocate_inference_cache(batch_size, max_seqlen)
+            def build_fresh_state(self, batch_size: int, max_seqlen: int, dtype=):  # Check layer_idx
+                conv_state, ssm_state = self.mamba.allocate_inference_cache(batch_size, max_seqlen, dtype=torch.float32)
                 inference_params = SimpleNamespace(
                     key_value_memory_dict={self.layer_idx: (conv_state, ssm_state)},
                     seqlen_offset=0  # Start from 0 for chunk processing

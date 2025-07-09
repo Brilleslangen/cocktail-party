@@ -53,7 +53,7 @@ def train_epoch(model: nn.Module, loader: DataLoader, loss_fn: Loss,
                                                                   " targets as input.")
 
         if hasattr(model, "reset_state"):
-            model.reset_state(batch_size=B, chunk_len=T)
+            model.reset_state(batch_size=B, chunk_len=T, dtype=amp_dtype if use_amp else torch.float32)
 
         # Forward pass with mixed precision
 
