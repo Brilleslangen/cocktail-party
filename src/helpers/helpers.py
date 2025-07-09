@@ -1,6 +1,6 @@
 import torch
 import platform
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 
 OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
 
@@ -14,9 +14,12 @@ def select_device() -> torch.device:
         return torch.device("cpu")
 
 
-def setup_device_optimizations():
+def setup_device_optimizations(cfg: DictConfig):
     """Configure device-specific optimizations."""
     device = select_device()
+    if cfg.training.params.cpu:
+        device = torch.device("cpu")
+        print("Using CPU for training.")
     device_type = device.type
 
     # Device-specific settings

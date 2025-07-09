@@ -179,7 +179,7 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def main(cfg: DictConfig):
     # Setup device and optimizations
-    device, use_amp, amp_dtype = setup_device_optimizations()
+    device, use_amp, amp_dtype = setup_device_optimizations(cfg)
     torch.manual_seed(cfg.training.params.seed)
 
     print(f"👨🏻‍🏫 Workers: {os.cpu_count()}")

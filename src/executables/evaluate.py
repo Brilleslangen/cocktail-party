@@ -243,7 +243,7 @@ def main(cfg: DictConfig):
     """
     Main evaluation script that downloads model from W&B and evaluates it.
     """
-    device, use_amp, amp_dtype = setup_device_optimizations()
+    device, use_amp, amp_dtype = setup_device_optimizations(cfg)
     model_name = cfg.model_artifact.split(':')[0] if ':' in cfg.model_artifact else cfg.model_artifact
 
     # Parse arguments
