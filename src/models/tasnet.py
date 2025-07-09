@@ -82,11 +82,11 @@ class TasNet(nn.Module):
 
         print(f'frames_per_context: {self.frames_per_context}, frames_per_output: {self.frames_per_output}')
 
-    def reset_state(self, batch_size: int, chunk_len: int):
+    def reset_state(self, batch_size: int, chunk_len: int, dtype: torch.dtype):
         """
         Reset the separator state if it has one.
         """
-        self.separator.reset_state(batch_size, chunk_len)
+        self.separator.reset_state(batch_size, chunk_len, dtype)
 
     def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
