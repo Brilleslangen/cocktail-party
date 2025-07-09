@@ -31,7 +31,8 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
         state = torch.load(artifact_path, map_location=device, weights_only=False)
         if 'cfg' not in state or 'model_state' not in state:
             raise ValueError("❌ Checkpoint missing 'cfg' or 'model_state'.")
-        cfg = state['cfg']
+        cfg = OmegaConf.create(state['cfg'])
+
         print(cfg)
         model_cfg = state['cfg']['model_arch']
         model = instantiate(model_cfg, device=device).to(device)
