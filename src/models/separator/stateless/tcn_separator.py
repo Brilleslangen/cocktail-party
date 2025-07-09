@@ -72,6 +72,12 @@ class TCNSeparator(SubModule):
             nn.Conv1d(bn_dim, output_dim, kernel_size=1)  # add streaming stride for time downsampling
         )
 
+    def reset_state(self):
+        """
+        should do nothing, as TCN is stateless.
+        """
+        pass
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the TCN separator.

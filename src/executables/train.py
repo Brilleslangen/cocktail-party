@@ -136,7 +136,7 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
                                       atol=1e-6), "Mix and references must be the same when using targets as input."
 
             # Reset state for stateful models
-            if hasattr(model, "reset_state"):
+            if hasattr(model, "reset_state") and not streaming_mode:
                 model.reset_state(batch_size=B, chunk_len=T)
 
             # Forward pass with mixed precision
@@ -159,7 +159,7 @@ def validate_epoch(model: torch.nn.Module, loader: DataLoader, criterion: Loss,
 
             B = ests.size(0)
 
-            # Compute energy-weighted metrics
+            # Compute metrics
             metrics = compute_validation_metrics(ests, mix, refs, lengths)
 
             # Accumulate metrics

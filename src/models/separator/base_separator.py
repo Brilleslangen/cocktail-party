@@ -117,8 +117,12 @@ class BaseSeparator(SubModule):
     def reset_state(self, batch_size: int, chunk_len: int):
         """Reset all hidden states."""
         if hasattr(self.blocks[0], 'build_fresh_state'):
-            self.hidden_states = [self.blocks[i].build_fresh_state(batch_size, chunk_len, i) for i in range(self.n_blocks)]
-        self.hidden_states = [None] * self.n_blocks
+            self.hidden_states = [self.blocks[i].build_fresh_state(batch_size, chunk_len, i) for i in
+                                  range(self.n_blocks)]
+        else:
+            self.hidden_states = [None] * self.n_blocks
+
+        print(f"Resetting hidden states")
 
     def detach_state(self):
         """Detach hidden states to truncate BPTT."""

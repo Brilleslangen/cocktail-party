@@ -40,11 +40,16 @@ class Streamer:
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:
         B, C, T = mix_batch.shape
 
-        # Reinitialize buffer
+        # Reinitialize buffer and model state
         self.reset(batch_size=B, channels=C)
+        if hasattr(self.model, "reset_state"):
+            self.model.reset_state(batch_size=B, chunk_len=self.model.frames_per_output)
 
         out_full = torch.zeros(B, C, T)
         for i, chunk in enumerate(iter_chunks(mix_batch, self.chunk_size)):
+            if hasattr(self.model.separator, 'hidden_states'):
+                print(f"States before chunk {i}: {[s is not None for s in self.model.separator.hidden_states]}")
+
             est = self.push(chunk)
             start = i * self.chunk_size
             end = min(start + self.chunk_size, T)

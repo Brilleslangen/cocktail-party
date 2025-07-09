@@ -86,8 +86,7 @@ class TasNet(nn.Module):
         """
         Reset the separator state if it has one.
         """
-        if hasattr(self.separator, "reset_state"):
-            self.separator.reset_state(batch_size, chunk_len)
+        self.separator.reset_state(batch_size, chunk_len)
 
     def pad_signal(self, mixture: torch.Tensor) -> Tuple[torch.Tensor, int]:
         """
