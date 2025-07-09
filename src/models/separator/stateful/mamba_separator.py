@@ -110,9 +110,6 @@ class MambaBlock(ResidualBlock):
 
                     state.seqlen_offset = self.curr_position
 
-                    if self.curr_position < 100:
-                        print('pos', self.curr_position, state.key_value_memory_dict[self.layer_idx][0])
-
                     for t in range(T):
                         frame = x[:, t:t+1, :]
                         out_frame = self.mamba(frame, inference_params=state)
@@ -125,6 +122,10 @@ class MambaBlock(ResidualBlock):
                     out = torch.cat(outputs, dim=1)
 
                     self.curr_position += self.chunk_len  # Increment position by chunk length due to buf roll
+
+                    if self.curr_position < 100:
+                        print('pos', self.curr_position, 'shape', state.key_value_memory_dict[self.layer_idx][0].shape,
+                              state.key_value_memory_dict[self.layer_idx][0])
                     
                     return out, state
                 else:
