@@ -7,4 +7,6 @@ params:
   batch_size:   1
   num_workers:  12
   local: true
+  cpu: false
+
 
