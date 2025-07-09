@@ -101,12 +101,13 @@ class MambaBlock(ResidualBlock):
                 return inference_params
 
             def forward(self, x, state=None):
+                import copy
                 if state is not None:
                     # Process the 3-token chunk normally
                     # Mamba2 will handle state updates internally
-                    state_before = state.copy()
+                    state_before = copy.deepcopy(state)
                     out = self.mamba(x, inference_params=state)
-                    state_after = state.copy()
+                    state_after = copy.deepcopy(state)
 
                     # Check if state has been updated
                     if state_before.key_value_memory_dict[self.layer_idx] != state_after.key_value_memory_dict[self.layer_idx]:
