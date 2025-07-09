@@ -7,7 +7,3 @@ defaults:
 
 # adjustments
 name: S-${model_arch.name}-streaming-asym
-
-training:
-    params:
-        batch_size: 70

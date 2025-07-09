@@ -9,7 +9,3 @@ name: S-${model_arch.separator.name}-streaming-asym
 model_arch:
     separator:
       context_size_ms: 34.0
-
-training:
-    params:
-      batch_size: 70
