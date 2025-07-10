@@ -1,77 +1,82 @@
 import os
-import glob
 import torch
 import torchaudio
 import hydra
 import wandb
-from tqdm import tqdm
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from hydra.utils import instantiate
-from torch import nn
 from src.helpers import select_device
 
-# Allow OmegaConf to handle PyTorch types if needed
-#from torch.serialization import add_safe_globals
-from omegaconf.listconfig import ListConfig
-from omegaconf.base import ContainerMetadata
-from typing import Any
-# add_safe_globals([ListConfig, ContainerMetadata, Any]) What is this?
 
-
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="inference")
 def run_inference(cfg: DictConfig):
     device = select_device()
 
-    # Determine checkpoint path via W&B Artifact or local file
+    model_name = cfg.model_artifact.split(':')[0] if ':' in cfg.model_artifact else cfg.model_artifact
+
+    # Initialize W&B if enabled
     if cfg.wandb.enabled:
         run = wandb.init(
             project=cfg.wandb.project,
             entity=cfg.wandb.entity,
             job_type="inference",
             name=cfg.name,
+            tags=cfg.wandb.tags,
             reinit='finish_previous'
         )
-        artifact = run.use_artifact(cfg.inference.artifact, type="model")
-        os.makedirs(cfg.training.model_save_dir, exist_ok=True)
-        artifact_dir = artifact.download(root=cfg.training.model_save_dir)
-        pt_files = glob.glob(os.path.join(artifact_dir, "*.pt"))
-        if not pt_files:
-            raise FileNotFoundError(f"No .pt files found in artifact at {artifact_dir}")
-        checkpoint_path = pt_files[0]
-        print(f"[W&B] Downloaded checkpoint from artifact to {checkpoint_path}")
-    else:
-        checkpoint_path = cfg.inference.local_checkpoint  # e.g. "outputs/{run_name}.pt"
-        print(f"[LOCAL] Using checkpoint at {checkpoint_path}")
 
-    # Build model and load weights
-    state = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    model_cfg = OmegaConf.to_object(cfg['model_arch'])
-    print(model_cfg)
-    model = instantiate(model_cfg).to(device)
-    if "model_state" in state:
-        model.load_state_dict(state["model_state"])
+        artifact = run.use_artifact(cfg.model_artifact, type="model")
+        model_dir = artifact.download(root=cfg.training.model_save_dir)
+        artifact_path = os.path.join(model_dir, f"{model_name}.pt")
+
+        print(f"[W&B] Checkpoint downloaded: {artifact_path}")
     else:
-        model.load_state_dict(state)
+        artifact_path = cfg.inference.local_checkpoint
+        print(f"[LOCAL] Using checkpoint: {artifact_path}")
+
+    state = torch.load(artifact_path, map_location=device, weights_only=False)
+
+    # Extract model config from checkpoint
+    if 'cfg' not in state:
+        raise ValueError("Checkpoint does not contain model configuration.")
+
+    artifact_cfg = state['cfg']
+    model = instantiate(artifact_cfg['model_arch'], device=device).to(device)
+
+    if "model_state" not in state:
+        raise ValueError("Checkpoint does not contain model_state.")
+
+    model.load_state_dict(state["model_state"])
     model.eval()
-    print(f"[✓] Loaded model weights from {checkpoint_path}")
+    print("✅ Model loaded successfully")
 
-    # Load and validate input audio
-    waveform, sample_rate = torchaudio.load(cfg.inference.input_audio)
-    if sample_rate != cfg.model_arch.sample_rate:
-        raise ValueError(f"Expected sample rate {cfg.model_arch.sample_rate}, got {sample_rate}")
+    # Load input audio
+    dataset_dir = os.path.join("artifacts", cfg.dataset.artifact_name)
+    input_audio_path = os.path.join(dataset_dir, cfg.inference.input_audio_file)
+    waveform, sample_rate = torchaudio.load(input_audio_path)
+    if sample_rate != artifact_cfg['model_arch']['sample_rate']:
+        raise ValueError(f"Expected sample rate {artifact_cfg['model_arch']['sample_rate']}, got {sample_rate}")
     if waveform.shape[0] != 2:
         raise ValueError(f"Expected stereo input, got {waveform.shape[0]} channel(s)")
 
     # Run inference
-    waveform = waveform.unsqueeze(0).to(device)  # [1, 2, T]
+    waveform = waveform.unsqueeze(0).to(device)
     with torch.no_grad():
-        left, right = model(waveform)
+        ests = model(waveform)
 
     # Save output
-    separated = torch.stack([left.squeeze(0), right.squeeze(0)], dim=0).cpu()  # [2, time]
-    os.makedirs(os.path.dirname(cfg.inference.output_audio), exist_ok=True)
-    torchaudio.save(cfg.inference.output_audio, separated, sample_rate)
-    print(f"[✓] Inference complete. Output saved to: {cfg.inference.output_audio}")
+    separated = ests.squeeze(0).cpu()
+    output_path = os.path.join(cfg.inference.output_dir, cfg.inference.output_audio_file)
+    os.makedirs(cfg.inference.output_dir, exist_ok=True)
+    torchaudio.save(output_path, separated, sample_rate)
+
+    print(f"[✓] Output saved: {output_path}")
+
+    # Push output to W&B as artifact
+    if cfg.wandb.enabled and cfg.inference.save_to_wandb:
+        output_artifact = wandb.Artifact(name=f"{cfg.name}_output", type="audio")
+        output_artifact.add_file(output_path)
+        run.log_artifact(output_artifact)
 
     if cfg.wandb.enabled:
         wandb.finish()

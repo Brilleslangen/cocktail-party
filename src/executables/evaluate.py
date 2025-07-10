@@ -30,7 +30,6 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
     model.eval()
     streamer = Streamer(model) if streaming_mode else None
 
-    # Initialize metric accumulators similar to validate_epoch
     totals = {
         "mc_si_sdr": 0.0,
         "mc_si_sdr_i": 0.0,
@@ -42,7 +41,6 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
         "confusion_rate": 0.0
     }
 
-    # For computing std
     squares = {k: 0.0 for k in totals}
     total_examples = 0
 
@@ -53,14 +51,13 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
         for mix, refs, lengths in tqdm(test_loader, desc="Evaluating", leave=False):
             if not streaming_mode:
                 mix, refs, lengths = mix.to(device), refs.to(device), lengths.to(device)
+
             model_input = refs if use_targets_as_input else mix
             B, C, T = mix.shape
 
-            # Reset state for stateful models
             if hasattr(model, "reset_state"):
                 model.reset_state(batch_size=B, chunk_len=T, dtype=amp_dtype if use_amp else torch.float32)
 
-            # Forward pass with mixed precision
             if use_amp and device.type == "cuda":
                 with torch.amp.autocast('cuda', dtype=amp_dtype):
                     if streaming_mode:
@@ -78,27 +75,20 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
             B = ests.size(0)
 
-            # Compute all evaluation metrics using the abstracted function
             metrics = compute_evaluation_metrics(ests, mix, refs, model.sample_rate, lengths)
 
-            # Accumulate metrics
             for metric_name, metric_values in metrics.items():
                 totals[metric_name] += metric_values.sum().item()
                 squares[metric_name] += (metric_values ** 2).sum().item()
 
             total_examples += B
 
-    # Compute mean and std for each metric
     results = {}
-    for metric_name, values in metrics.items():
-        # Convert to numpy array for nan-aware ops
-        values = torch.asarray(values)
+    for metric_name in totals:
+        mean = totals[metric_name] / total_examples
+        variance = squares[metric_name] / total_examples - mean ** 2
+        std = np.sqrt(max(variance, 0.0))
 
-        # Mask out NaNs for mean/std
-        mean = torch.nanmean(values)
-        std = torch.sqrt(torch.nanmean(values ** 2) - mean ** 2)
-
-        # Format the output names
         if metric_name == 'mc_si_sdr':
             display_name = 'MC-SI-SDR (dB)'
         elif metric_name == 'mc_si_sdr_i':
@@ -115,14 +105,13 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
             display_name = 'BINAQUAL'
         elif metric_name == 'confusion_rate':
             display_name = 'Confusion Rate (%)'
-            mean *= 100  # Convert to percentage
+            mean *= 100
             std *= 100
 
         results[display_name] = (mean, std)
 
-    # Compute RTF
     rtf = compute_rtf(model, audio_duration=1.0, device=device)
-    results['RTF'] = (rtf, 0.0)  # RTF doesn't have std
+    results['RTF'] = (rtf, 0.0)
 
     return results
 
@@ -244,6 +233,7 @@ def main(cfg: DictConfig):
     Main evaluation script that downloads model from W&B and evaluates it.
     """
     device, use_amp, amp_dtype = setup_device_optimizations(cfg)
+    amp_dtype = torch.float32
     model_name = cfg.model_artifact.split(':')[0] if ':' in cfg.model_artifact else cfg.model_artifact
 
     # Parse arguments
