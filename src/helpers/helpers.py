@@ -43,9 +43,11 @@ def setup_device_optimizations(cfg: DictConfig):
             print("   ✓ FlashAttention-2 compatible GPU detected")
 
         # Mixed precision settings
-        use_amp = True
-        amp_dtype = torch.float16  # Use bfloat16 if available on Ampere+
-        if gpu_capability[0] >= 8:
+        use_amp = cfg.use_amp
+        amp_dtype = torch.float16 if use_amp else torch.float32  # Use bfloat16 if available on Ampere+
+        if not use_amp and amp_dtype == torch.float32:
+            print("   ✓ Mixed precision disabled, using float32")
+        elif gpu_capability[0] >= 8:
             amp_dtype = torch.bfloat16
             print("   ✓ Using bfloat16 for mixed precision")
         else:
