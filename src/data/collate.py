@@ -17,7 +17,7 @@ from src.helpers import using_cuda
 def _obtain_dataset_dir(cfg: DictConfig) -> tuple[str | Any, Run | None]:
     run = wandb.run
 
-    artifact_root = "./artifacts" if cfg.training.params.local else "/cluster/home/nicolts/cocktail-party/artifacts"
+    artifact_root = "./artifacts" if cfg.training.params.local else os.path.expanduser("~/cocktail-party/artifacts")
     artifact = run.use_artifact(cfg.dataset.artifact_name, type="dataset")
     artifact_path = os.path.join(artifact_root, artifact.name)
 

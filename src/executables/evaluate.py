@@ -20,7 +20,8 @@ from src.data.streaming import Streamer
 
 
 def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: torch.device,
-                   use_amp: bool, amp_dtype: torch.dtype) -> Dict[str, Tuple[float, float]]:
+                   use_amp: bool, amp_dtype: torch.dtype, ignore_confused: bool = False) -> Dict[
+    str, Tuple[float, float]]:
     """
     Evaluate model on all metrics and return mean and std for each.
 
@@ -77,11 +78,22 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
             metrics = compute_evaluation_metrics(ests, mix, refs, model.sample_rate, lengths)
 
+            if ignore_confused:
+                confusion_rate = metrics.get('confusion_rate', torch.zeros_like(next(iter(metrics.values()))))
+                mask = confusion_rate != 1.0  # True for rows to keep
+                for key in metrics.keys():
+                    # Only mask if the metric is per-sample and matches the confusion_rate shape
+                    if isinstance(metrics[key], torch.Tensor) and metrics[key].shape == confusion_rate.shape:
+                        metrics[key] = metrics[key][mask]
+                num_examples = mask.sum().item()
+            else:
+                num_examples = B  # Original batch size
+
             for metric_name, metric_values in metrics.items():
                 totals[metric_name] += metric_values.sum().item()
                 squares[metric_name] += (metric_values ** 2).sum().item()
 
-            total_examples += B
+            total_examples += num_examples
 
     results = {}
     for metric_name in totals:
@@ -311,8 +323,12 @@ def main(cfg: DictConfig):
     print("\n🧪 Running evaluation...")
     if hasattr(cfg, 'num_runs') and cfg.num_runs > 1:
         print(f"🔁 Running {cfg.num_runs} runs for stability...")
-        run_results = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype)
-                       for _ in range(cfg.num_runs)]
+        if hasattr(cfg, 'ignore_confused'):
+            run_results = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype,
+                                          ignore_confused=cfg.ignore_confused) for _ in range(cfg.num_runs)]
+        else:
+            run_results = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype,
+                                          ignore_confused=False) for _ in range(cfg.num_runs)]
         # Average results across runs
         results = {}
         for key in run_results[0].keys():
