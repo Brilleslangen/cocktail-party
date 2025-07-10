@@ -116,7 +116,7 @@ class BaseSeparator(SubModule):
 
     def reset_state(self, batch_size: int, chunk_len: int, dtype=None):
         """Reset all hidden states."""
-        if hasattr(self.blocks[0].core, 'build_fresh_state'):
+        if hasattr(self.blocks[0].core, 'build_fresh_state') and self.streaming_mode:
             self.hidden_states = [self.blocks[i].core.build_fresh_state(batch_size, chunk_len, dtype) for i in
                                   range(self.n_blocks)]
 
