@@ -1,4 +1,23 @@
-artifact: "conv-tasnet_1.96M:latest"
-local_checkpoint: "artifacts/${name}.pt"
-input_audio:  "../datasets/static/val/clean/test.wav"
-output_audio: "../inference/separated_output.wav"
+# @package _global_
+defaults:
+  - /dataset: static_big
+  - /training: default
+  - /wandb: default
+  - _self_
+
+model_artifact: L-conv-offline_19.88M:v0
+name: L-conv-offline-inference
+
+
+inference:
+  input_audio_file: "test/mixture/mix_clip_000847_clip_002307.wav"
+  output_audio_file: "mix_clip_000847_clip_002307_separated.wav"
+  output_dir: "outputs/inference"
+  save_to_wandb: false
+
+wandb:
+  enabled: true
+  tags: [inference]
+
+hydra:
+  mode: MULTIRUN
