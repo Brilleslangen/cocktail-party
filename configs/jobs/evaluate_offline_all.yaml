@@ -31,7 +31,7 @@ hydra:
 
 training:
   params:
-    batch_size: 5
+    batch_size: 50
     use_amp: false
 
 ignore_confused: false
