@@ -7,7 +7,7 @@ from src.evaluate.pkg_funcs import compute_mask, compute_energy_weights
 def masked_snr_loss(est, ref, mask, loss_scale=1.0, eps=1e-8):
     """
     est, ref, mask: [B, T]
-    Computes negative scaled SDR loss (minimize -SDR)
+    Computes negative scaled SNR loss (minimize -SNR)
     """
     # Compute the numerator as signal power
     signal_power = ((ref * mask) ** 2).sum(dim=1)
@@ -15,8 +15,8 @@ def masked_snr_loss(est, ref, mask, loss_scale=1.0, eps=1e-8):
     # Compute the denominator as distortion power (includes interference and noise)
     distortion_power = (((est - ref) * mask) ** 2).sum(dim=1)
 
-    sdr = 10 * torch.log10((signal_power + eps) / (distortion_power + eps))  # [B]
-    return loss_scale * -sdr  # Negative because we minimize
+    snr = 10 * torch.log10((signal_power + eps) / (distortion_power + eps))  # [B]
+    return loss_scale * -snr  # Negative because we minimize
 
 
 def masked_mono_mse(est, ref, mask, eps=1e-8):

@@ -415,11 +415,14 @@ def compute_evaluation_metrics(est: torch.Tensor, mix: torch.Tensor, ref: torch.
     Returns:
         dict with metric names and [B] tensor values
     """
+    mc_si_sdri, mc_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=True)
+    ew_si_sdri, ew_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=False)
+
     metrics = {
-        'mc_si_sdr': compute_SI_SDRs(est, ref, lengths, multi_channel=True),
-        'mc_si_sdr_i': compute_si_sdr_i(est, mix, ref, lengths, multi_channel=True),
-        'ew_si_sdr': compute_SI_SDRs(est, ref, lengths, multi_channel=False, eps=1e-8),
-        'ew_si_sdr_i': compute_si_sdr_i(est, mix, ref, lengths, multi_channel=False, eps=1e-8),
+        'mc_si_sdr': mc_si_sdr_est,
+        'mc_si_sdr_i': mc_si_sdri,
+        'ew_si_sdr': ew_si_sdr_est,
+        'ew_si_sdr_i': ew_si_sdri,
         'ew_estoi': energy_weighted_estoi(est, ref, lengths, sample_rate),
         'ew_pesq': energy_weighted_pesq(est, ref, lengths, sample_rate),
         'binaqual': compute_binaqual(est, ref, lengths),

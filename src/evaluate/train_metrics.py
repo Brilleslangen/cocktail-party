@@ -137,7 +137,7 @@ def compute_SI_SDRs(
 
 def compute_si_sdr_i(est, mix, ref, lengths: torch.Tensor, multi_channel: bool, eps=1e-8):
     """
-    Energy-weighted Scale-Invariant Signal-to-Distortion Ratio Improvement.
+    Scale-Invariant Signal-to-Distortion Ratio Improvement.
 
     Args:
         multi_channel:
@@ -149,12 +149,12 @@ def compute_si_sdr_i(est, mix, ref, lengths: torch.Tensor, multi_channel: bool, 
         eps: small value for numerical stability
 
     Returns:
-        [B] - energy-weighted SI-SDR improvement in dB per sample
+        [B] - SI-SDR improvement (est - mix) and SI-SDR of the estimate.
     """
 
     si_sdr_est = compute_SI_SDRs(est, ref, lengths, multi_channel, eps=eps)
     si_sdr_mix = compute_SI_SDRs(mix, ref, lengths, multi_channel, eps=eps)
-    return si_sdr_est - si_sdr_mix
+    return si_sdr_est - si_sdr_mix, si_sdr_est
 
 
 def compute_validation_metrics(est, mix, ref, lengths: torch.Tensor):
@@ -171,14 +171,17 @@ def compute_validation_metrics(est, mix, ref, lengths: torch.Tensor):
     Returns:
         dict with metric names and [B] tensor values
     """
+    mc_si_sdri, mc_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=True)
+    ew_si_sdri, ew_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=False)
+
     metrics = {
         'ew_mse': masked_mse(est, ref, lengths),
         'mc_sdr': compute_SDRs(est, ref, lengths, multi_channel=True),
-        'mc_si_sdr': compute_SI_SDRs(est, ref, lengths, multi_channel=True),
-        'mc_si_sdr_i': compute_si_sdr_i(est, mix, ref, lengths, multi_channel=True),
+        'mc_si_sdr': mc_si_sdr_est,
+        'mc_si_sdr_i': mc_si_sdri,
         'ew_sdr': compute_SDRs(est, ref, lengths, multi_channel=False),
-        'ew_si_sdr': compute_SI_SDRs(est, ref, lengths, multi_channel=False),
-        'ew_si_sdr_i': compute_si_sdr_i(est, mix, ref, lengths, multi_channel=False),
+        'ew_si_sdr': ew_si_sdr_est,
+        'ew_si_sdr_i': ew_si_sdri,
     }
 
     return metrics
