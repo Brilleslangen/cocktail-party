@@ -16,5 +16,5 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      model_artifact: m-transformer-offline_5.12M:latest
+      model_artifact: L-transformer-offline_19.84M:latest
 

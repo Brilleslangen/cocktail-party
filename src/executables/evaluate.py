@@ -58,7 +58,7 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
 
             # Reset state for stateful models
             if hasattr(model, "reset_state"):
-                model.reset_state(B, T)
+                model.reset_state(batch_size=B, chunk_len=T, dtype=amp_dtype if use_amp else torch.float32)
 
             # Forward pass with mixed precision
             if use_amp and device.type == "cuda":
