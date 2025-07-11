@@ -15,18 +15,18 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      model_artifact: # L-transformer-offline_19.84M:v0,
-        S-mamba-offline_1.10M:v0
-#        M-mamba-offline_5.11M:v0,
-#        L-mamba-offline_19.74M:v0,
-#        S-transformer-offline_1.08M:v0,
-#        S-transformer-offline_5.12M:v0,
-#        L-liquid-offline_20.11M:v0,
-#        M-liquid-offline_5.10M:v0,
-#        S-liquid-offline_1.08M:v0,
-#        L-conv-offline_19.88M:v0,
-#        M-conv-offline_5.11M:v0,
-#        S-conv-offline_1.10M:v0
+      model_artifact: L-transformer-offline_19.84M:v0,
+        S-mamba-offline_1.10M:v0,
+        M-mamba-offline_5.11M:v0,
+        L-mamba-offline_19.74M:v0,
+        S-transformer-offline_1.08M:v0,
+        S-transformer-offline_5.12M:v0,
+        L-liquid-offline_20.11M:v0,
+        M-liquid-offline_5.10M:v0,
+        S-liquid-offline_1.08M:v0,
+        L-conv-offline_19.88M:v0,
+        M-conv-offline_5.11M:v0,
+        S-conv-offline_1.10M:v0
 
 
 training:
