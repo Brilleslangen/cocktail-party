@@ -1,0 +1,31 @@
+# @package _global_
+defaults:
+  - /dataset: static_big         # Dataset selection
+  - /training: local
+  - /wandb: default
+  - _self_
+
+group: eval-offline
+model_artifact: none
+
+wandb:
+  tags: [evaluation]
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      model_artifact:
+        # L-liquid-offline_20.11M:v0,
+        # M-liquid-offline_5.10M:v0,
+        S-liquid-offline_1.08M:v0
+
+
+
+
+training:
+  params:
+    batch_size: 1
+    use_amp: false
+
+ignore_confused: true

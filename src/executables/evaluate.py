@@ -1,10 +1,11 @@
 import os
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import torch
 import torch.nn as nn
 import numpy as np
+import pandas as pd
 import hydra
 import wandb
 from tqdm import tqdm
@@ -20,30 +21,30 @@ from src.data.streaming import Streamer
 
 
 def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: torch.device,
-                   use_amp: bool, amp_dtype: torch.dtype, ignore_confused: bool = False) -> Dict[
-    str, Tuple[float, float]]:
+                   use_amp: bool, amp_dtype: torch.dtype, ignore_confused: bool = False
+                   ) -> Tuple[Dict[str, Tuple[float, float, float]], Dict[str, List[float]]]:
     """
-    Evaluate model on all metrics and return mean and std for each.
+    Evaluate model on all metrics and return mean, std, median for each metric,
+    as well as individual values for violin plots.
 
     Returns:
-        Dictionary mapping metric_name -> (mean, std)
+        (summary_results, metric_values)
+        - summary_results: Dict[metric_name -> (mean, std, median)]
+        - metric_values: Dict[metric_name -> List of values]
     """
     model.eval()
     streamer = Streamer(model) if streaming_mode else None
 
-    totals = {
-        "mc_si_sdr": 0.0,
-        "mc_si_sdr_i": 0.0,
-        "ew_si_sdr": 0.0,
-        "ew_si_sdr_i": 0.0,
-        "ew_estoi": 0.0,
-        "ew_pesq": 0.0,
-        "binaqual": 0.0,
-        "confusion_rate": 0.0
+    metric_values = {
+        "mc_si_sdr": [],
+        "mc_si_sdr_i": [],
+        "ew_si_sdr": [],
+        "ew_si_sdr_i": [],
+        "ew_estoi": [],
+        "ew_pesq": [],
+        "binaqual": [],
+        "confusion_rate": []
     }
-
-    squares = {k: 0.0 for k in totals}
-    total_examples = 0
 
     use_targets_as_input = getattr(model, "use_targets_as_input", False)
     print(f"🎯 Using targets as input: {use_targets_as_input}")
@@ -74,32 +75,24 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
                 else:
                     ests = model(model_input)
 
-            B = ests.size(0)
-
             metrics = compute_evaluation_metrics(ests, mix, refs, model.sample_rate, lengths)
 
             if ignore_confused:
                 confusion_rate = metrics.get('confusion_rate', torch.zeros_like(next(iter(metrics.values()))))
                 mask = confusion_rate != 1.0  # True for rows to keep
                 for key in metrics.keys():
-                    # Only mask if the metric is per-sample and matches the confusion_rate shape
                     if isinstance(metrics[key], torch.Tensor) and metrics[key].shape == confusion_rate.shape:
                         metrics[key] = metrics[key][mask]
-                num_examples = mask.sum().item()
-            else:
-                num_examples = B  # Original batch size
 
-            for metric_name, metric_values in metrics.items():
-                totals[metric_name] += metric_values.sum().item()
-                squares[metric_name] += (metric_values ** 2).sum().item()
+            for metric_name, values in metrics.items():
+                metric_values[metric_name].extend(values.cpu().numpy().tolist())
 
-            total_examples += num_examples
-
-    results = {}
-    for metric_name in totals:
-        mean = totals[metric_name] / total_examples
-        variance = squares[metric_name] / total_examples - mean ** 2
-        std = np.sqrt(max(variance, 0.0))
+    # Compute summary statistics
+    summary_results = {}
+    for metric_name, values in metric_values.items():
+        mean = np.mean(values)
+        std = np.std(values)
+        median = np.median(values)
 
         if metric_name == 'mc_si_sdr':
             display_name = 'MC-SI-SDR (dB)'
@@ -119,57 +112,67 @@ def evaluate_model(model: nn.Module, test_loader, streaming_mode: bool, device: 
             display_name = 'Confusion Rate (%)'
             mean *= 100
             std *= 100
+            median *= 100
 
-        results[display_name] = (mean, std)
+        summary_results[display_name] = (mean, std, median)
 
     rtf = compute_rtf(model, audio_duration=1.0, device=device)
-    results['RTF'] = (rtf, 0.0)
+    summary_results['RTF'] = (rtf, 0.0, 0.0)
 
-    return results
+    return summary_results, metric_values
 
 
-def format_results_table(results: Dict[str, Tuple[float, float]],
-                         param_count: str, macs_str: str) -> Tuple[str, str]:
+
+def format_results_table(results: Dict[str, Tuple[float, float, float]],
+                         param_count: str, macs_str: str) -> Tuple[str, str, str]:
     """
-    Format results into two tables: one for values, one for standard deviations.
+    Format results into three tables: one for means, one for standard deviations, and one for medians.
     """
-    # Add model capacity metrics (no std)
-    results['Parameters'] = (param_count, 'N/A')
-    results['MACs/s'] = (macs_str, 'N/A')
+    # Add model capacity metrics (no std or median)
+    results['Parameters'] = (param_count, 'N/A', 'N/A')
+    results['MACs/s'] = (macs_str, 'N/A', 'N/A')
 
     # Prepare data for tables
     metrics = []
-    values = []
+    means = []
     stds = []
+    medians = []
 
-    for metric, (value, std) in results.items():
+    for metric, (mean, std, median) in results.items():
         metrics.append(metric)
-        if isinstance(value, str):
-            values.append(value)
+        if isinstance(mean, str):
+            means.append(mean)
             stds.append(std)
+            medians.append(median)
         else:
             if metric == 'Confusion Rate (%)':
-                values.append(f"{value:.1f}")
+                means.append(f"{mean:.1f}")
                 stds.append(f"{std:.1f}")
+                medians.append(f"{median:.1f}")
             elif metric == 'RTF':
-                values.append(f"{value:.3f}")
+                means.append(f"{mean:.3f}")
                 stds.append("N/A")
+                medians.append(f"{median:.3f}")
             elif metric in ['EW-SI-SDRi (dB)']:
-                values.append(f"{value:.2f}")
+                means.append(f"{mean:.2f}")
                 stds.append(f"{std:.2f}")
+                medians.append(f"{median:.2f}")
             else:  # ESTOI, PESQ, BINAQUAL
-                values.append(f"{value:.3f}")
+                means.append(f"{mean:.3f}")
                 stds.append(f"{std:.3f}")
+                medians.append(f"{median:.3f}")
 
     # Create tables
-    value_table = tabulate([values], headers=metrics, tablefmt='grid')
+    mean_table = tabulate([means], headers=metrics, tablefmt='grid')
     std_table = tabulate([stds], headers=metrics, tablefmt='grid')
+    median_table = tabulate([medians], headers=metrics, tablefmt='grid')
 
-    return value_table, std_table
+    return mean_table, std_table, median_table
+
 
 
 def save_evaluation_results(experiment_name: str, model_name: str,
-                            value_table: str, std_table: str):
+                            value_table: str, median_table: str, std_table: str):
     """
     Save or update evaluation results in the experiment file.
     """
@@ -210,6 +213,10 @@ def save_evaluation_results(experiment_name: str, model_name: str,
             "Values:",
             value_table,
             "",
+            "",
+            "Medians:",
+            median_table,
+            "",
             "Standard Deviations:",
             std_table,
             ""
@@ -225,6 +232,9 @@ def save_evaluation_results(experiment_name: str, model_name: str,
 
 Values:
 {value_table}
+
+Medians:
+{median_table}
 
 Standard Deviations:
 {std_table}
@@ -247,6 +257,7 @@ def main(cfg: DictConfig):
     device, use_amp, amp_dtype = setup_device_optimizations(cfg)
     amp_dtype = torch.float32
     model_name = cfg.model_artifact.split(':')[0] if ':' in cfg.model_artifact else cfg.model_artifact
+    print(type(model_name))
 
     # Parse arguments
     if not cfg.model_artifact:
@@ -324,34 +335,50 @@ def main(cfg: DictConfig):
     if hasattr(cfg, 'num_runs') and cfg.num_runs > 1:
         print(f"🔁 Running {cfg.num_runs} runs for stability...")
         if hasattr(cfg, 'ignore_confused'):
-            run_results = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype,
+            run_results, metric_values = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype,
                                           ignore_confused=cfg.ignore_confused) for _ in range(cfg.num_runs)]
         else:
-            run_results = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype,
+            run_results, metric_values = [evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype,
                                           ignore_confused=False) for _ in range(cfg.num_runs)]
         # Average results across runs
         results = {}
         for key in run_results[0].keys():
             means = [torch.as_tensor(result[key][0]).float() for result in run_results]
-            stds = [torch.as_tensor(result[key][1]).float() for result in run_results]
+            medians = [torch.as_tensor(result[key][1]).float() for result in run_results]
+            stds = [torch.as_tensor(result[key][2]).float() for result in run_results]
             mean = torch.stack(means).mean()
+            median = torch.stack(medians).mean()
             std = torch.stack(stds).mean()
-            results[key] = (mean.item(), std.item())
+            results[key] = (mean.item(), median.item(), std.item())
+    elif hasattr(cfg, 'ignore_confused'):
+        results, metric_values = evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype, ignore_confused=cfg.ignore_confused)
     else:
-        results = evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype)
-
+        results, metric_values = evaluate_model(model, test_loader, streaming_mode, device, use_amp, amp_dtype, ignore_confused=False)
     # Format results
-    value_table, std_table = format_results_table(results, pretty_params, pretty_macs)
+    value_table, std_table, median_table = format_results_table(results, pretty_params, pretty_macs)
 
     # Print results
     print("\n📊 Evaluation Results:")
+    print("Ignoring confused: ", cfg.ignore_confused) if hasattr(cfg, 'ignore_confused') else None
     print("\nValues:")
     print(value_table)
+    print("\nMedians:")
+    print(median_table)
     print("\nStandard Deviations:")
     print(std_table)
 
     # Save results
-    save_evaluation_results(cfg.group, model_name, value_table, std_table)
+    save_evaluation_results(cfg.group, model_name, value_table, median_table, std_table)
+
+    # Save full metrics df for plot
+    df_metrics = pd.DataFrame(metric_values)
+    output_path = f"outputs/{model_name}_metrics_confused_{cfg.ignore_confused}.csv" if hasattr(cfg, 'ignore_confused') else f"outputs/{model_name}_metrics_confused_false.csv"
+    df_metrics.to_csv(output_path, index=False)
+
+    if cfg.wandb.enabled:
+        output_artifact = wandb.Artifact(name=f"{model_name}_metric_log", type="csv")
+        output_artifact.add_file(output_path)
+        run.log_artifact(output_artifact)
 
     # Log to W&B
     if cfg.wandb.enabled:
