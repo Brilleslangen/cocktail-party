@@ -4,13 +4,14 @@ defaults:
   - /runs/streaming: s-mamba-sym
 
 model_arch:
-  streaming_mode: true
   encoder:
     causal: true
   decoder:
     causal: true
   separator:
     causal_proj: true
+
+group: 4-streaming-causal
 
 hydra:
   mode: MULTIRUN
