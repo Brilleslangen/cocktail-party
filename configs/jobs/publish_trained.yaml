@@ -3,6 +3,8 @@ defaults:
   - /wandb: default
   - _self_
 
+group: 4-streaming
+
 publish_model: null
 
 hydra:
