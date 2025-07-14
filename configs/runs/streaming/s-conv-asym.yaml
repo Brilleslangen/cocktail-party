@@ -6,7 +6,7 @@ defaults:
   - override /model_arch/separator: tcn
 
 # adjustments
-name: S-${model_arch.separator.name}-streaming-asym
+name: S-${model_arch.separator.name}-streaming-asym-bidirect
 
 training:
     params:

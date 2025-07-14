@@ -6,7 +6,7 @@ defaults:
   - override /model_arch/separator: mamba
 
 # adjustments
-name: S-${model_arch.separator.name}-streaming-short-asym
+name: S-${model_arch.separator.name}-streaming-short-asym-bidirect
 
 model_arch:
   separator:

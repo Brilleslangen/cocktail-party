@@ -8,8 +8,8 @@ defaults:
 
   - override /model_arch/separator: transformer
 
-name: S-${model_arch.name}-streaming-sym
-group: 4-streaming
+name: S-${model_arch.name}-streaming-sym-bidirect
+group: 10-streaming-bidirect
 
 model_arch:
   streaming_mode: true

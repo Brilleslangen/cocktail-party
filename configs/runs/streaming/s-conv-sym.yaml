@@ -6,4 +6,4 @@ defaults:
   - override /model_arch/separator: tcn
 
 # adjustments
-name: S-${model_arch.separator.name}-streaming-sym
+name: S-${model_arch.separator.name}-streaming-sym-bidirect
