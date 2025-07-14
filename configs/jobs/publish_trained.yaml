@@ -12,7 +12,7 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      publish_model: L-liquid-streaming-sym_20.11M.pt 
+      publish_model: L-liquid-streaming-sym_20.11M.pt, 
         S-conv-streaming-sym_1.10M.pt,
         S-liquid-streaming-sym_1.04M.pt,
         S-mamba-streaming-sym_1.10M.pt,
