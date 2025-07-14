@@ -22,6 +22,8 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
     device = select_device()
     model, model_cfg = None, None
 
+    input_cfg = cfg
+
     if artifact_name is not None:
         # ----------------------------------------
         # Load model checkpoint from artifact
@@ -68,11 +70,11 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
     # W&B run
     # ----------------------------------------
     run = wandb.init(
-        project=cfg.wandb.project,
-        entity=cfg.wandb.entity,
-        group=cfg.wandb.group,
-        tags=cfg.wandb.tags,
-        job_type="publish_untrained",
+        project=input_cfg.wandb.project,
+        entity=input_cfg.wandb.entity,
+        group=input_cfg.wandb.group,
+        tags=input_cfg.wandb.tags,
+        job_type="publish_untrained" if artifact_name is None else "publish_trained",
         name=f"publish_{run_name}",
         reinit="finish_previous",
         config=OmegaConf.to_container(cfg, resolve=True),
