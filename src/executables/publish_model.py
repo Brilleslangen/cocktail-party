@@ -59,7 +59,10 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
         pretty_params = "-"
         pretty_macs = "-"
 
-    run_name = f"{cfg.name}_{pretty_params}" if pretty_params != "-" else cfg.name
+    try:
+        run_name = f"{cfg.name}_{pretty_params}" if pretty_params != "-" else cfg.name
+    except Exception as e:
+        run_name = artifact_name.split('.')[0]
 
     # ----------------------------------------
     # W&B run
