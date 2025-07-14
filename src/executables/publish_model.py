@@ -88,7 +88,7 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
     # ----------------------------------------
     # Save checkpoint (to temp dir)
     # ----------------------------------------
-    ckpt_dir = cfg.training.model_save_dir
+    ckpt_dir = input_cfg.training.model_save_dir
     os.makedirs(ckpt_dir, exist_ok=True)
     ckpt_path = os.path.join(ckpt_dir, f"{run_name}.pt")
 
