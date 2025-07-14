@@ -64,8 +64,8 @@ def build_and_publish(cfg: DictConfig, artifact_name: str = None):
     try:
         run_name = f"{cfg.name}_{pretty_params}" if pretty_params != "-" else cfg.name
     except Exception as e:
-        run_name = artifact_name.split('.')[0]
-
+        # Set  runname to artifact name and remove .p
+        run_name = artifact_name.replace('.pt', '') if artifact_name else "untrained_model"
     # ----------------------------------------
     # W&B run
     # ----------------------------------------
