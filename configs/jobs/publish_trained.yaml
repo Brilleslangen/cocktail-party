@@ -8,5 +8,11 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      publish_model: S-transformer-streaming-context_1.08M.pt, S-transformer-streaming-chunk_1.08M.pt, S-mamba-streaming-extended-chunk_1.10M.pt,
-        S-mamba-streaming-chunk_1.10M.pt, S-liquid-streaming-chunk_1.04M.pt
+      publish_model: L-liquid-streaming-sym_20.11M,
+        S-conv-streaming-sym_1.10M,
+        S-liquid-streaming-sym_1.04M,
+        S-mamba-streaming-sym_1.10M,
+        L-mamba-streaming-sym_19.74M,
+        S-liquid-streaming-asym_1.04M,
+        S-mamba-streaming-asym_1.10M,
+        S-mamba-streaming-short-asym_1.10M
