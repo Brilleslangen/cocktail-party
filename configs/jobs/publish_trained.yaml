@@ -1,5 +1,6 @@
 # @package _global_
 defaults:
+  - /training: default
   - /wandb: default
   - _self_
 
