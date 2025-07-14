@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - wandb: default
+  - /wandb: default
   - _self_
 
 publish_model: null
