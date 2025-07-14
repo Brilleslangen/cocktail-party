@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - _self_
+  - /runs/offline: l-mamba
+
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    params:
+      runs/offline: l-mamba-global
+
+model_arch:
+  streaming_mode: false
+  encoder:
+    causal: false
+  decoder:
+    causal: false
+  separator:
+    scaler: 2.0
+    causal_proj: false

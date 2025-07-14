@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - l-transformer
+  - _self_
+
+name: L-${model_arch.name}-offline-global
+
+model_arch:
+  streaming_mode: false
+  encoder:
+    causal: false
+  decoder:
+    causal: false
+  separator:
+    causal_proj: false

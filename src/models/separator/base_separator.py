@@ -52,7 +52,7 @@ class BaseSeparator(SubModule):
         self.hidden_states = [None] * n_blocks
 
         # Input normalization
-        self.input_norm = CausalLayerNorm(input_dim, channel_last=True) if causal else nn.LayerNorm(input_dim)
+        self.input_norm = CausalLayerNorm(input_dim, channel_last=True) if causal else GlobalLayerNorm(input_dim, channel_last=True)
         self.input_proj = nn.Linear(input_dim, d_model)
 
         self.positional_encoding = PositionalEncoding(d_model, max_len=self.frames_per_context) if pos_enc else None
@@ -170,15 +170,18 @@ class ResidualBlock(nn.Module):
         self.dropout_val = dropout_val
 
         # Choose LayerNorm based on causality
-        Norm = CausalLayerNorm if self.causal else nn.LayerNorm
+        if causal:
+            Norm = CausalLayerNorm(d_model, channel_last=True)
+        else:
+            Norm = GlobalLayerNorm(d_model, channel_last=True)
 
-        self.norm1 = Norm(d_model)
+        self.norm1 = Norm
         self.core = self._build_core_layer()  # Multi-Head Attention, S4, Mamba or Liquid
         self.post_core_gelu = nn.GELU() if post_core_gelu else None
         self.linear1 = nn.Linear(d_model, d_model)
         self.dropout1 = nn.Dropout(dropout_val)
 
-        self.norm2 = Norm(d_model)
+        self.norm2 = Norm
         self.ffn = build_FFN(d_model, d_ff, dropout_val)
 
     @abstractmethod
@@ -267,4 +270,34 @@ class CausalLayerNorm(nn.Module):
         x_norm = (x - mean) / torch.sqrt(var + self.eps)
 
         return x_norm * self.weight + self.bias
+
+
+class GlobalLayerNorm(nn.Module):
+    def __init__(self, num_features, channel_last=True, eps=1e-8, affine=True):
+        super().__init__()
+        self.eps = eps
+        self.affine = affine
+        self.channel_last = channel_last
+
+        # Determine parameter shape based on channel position
+        param_shape = (1, num_features, 1) if not channel_last else (1, 1, num_features)
+        if affine:
+            self.gamma = nn.Parameter(torch.ones(param_shape))
+            self.beta = nn.Parameter(torch.zeros(param_shape))
+
+    def forward(self, x):
+        # x: (batch, channels, time) or (batch, time, channels)
+        if self.channel_last:
+            # Channel is last dim: normalize over (time, channels)
+            mean = x.mean(dim=(1, 2), keepdim=True)
+            var = x.var(dim=(1, 2), keepdim=True, unbiased=False)
+        else:
+            # Channel is dim=1: normalize over (channels, time)
+            mean = x.mean(dim=(1, 2), keepdim=True)
+            var = x.var(dim=(1, 2), keepdim=True, unbiased=False)
+        x_norm = (x - mean) / (var + self.eps).sqrt()
+        if self.affine:
+            x_norm = x_norm * self.gamma + self.beta
+        return x_norm
+
 
