@@ -8,7 +8,7 @@ from hydra.utils import instantiate
 from src.helpers import select_device
 
 
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="inference")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="inference/default")
 def run_inference(cfg: DictConfig):
     device = select_device()
 
@@ -20,7 +20,7 @@ def run_inference(cfg: DictConfig):
             project=cfg.wandb.project,
             entity=cfg.wandb.entity,
             job_type="inference",
-            name=cfg.name,
+            name=f"{model_name}_inference",
             tags=cfg.wandb.tags,
             reinit='finish_previous'
         )
@@ -51,7 +51,7 @@ def run_inference(cfg: DictConfig):
     print("✅ Model loaded successfully")
 
     # Load input audio
-    dataset_dir = os.path.join("artifacts", cfg.dataset.artifact_name)
+    dataset_dir = os.path.join("artifacts", "static-2-spk-noise12")
     input_audio_path = os.path.join(dataset_dir, cfg.inference.input_audio_file)
     waveform, sample_rate = torchaudio.load(input_audio_path)
     if sample_rate != artifact_cfg['model_arch']['sample_rate']:
@@ -66,7 +66,7 @@ def run_inference(cfg: DictConfig):
 
     # Save output
     separated = ests.squeeze(0).cpu()
-    output_path = os.path.join(cfg.inference.output_dir, cfg.inference.output_audio_file)
+    output_path = os.path.join(cfg.inference.output_dir, f"{model_name}_{cfg.inference.output_audio_file}")
     os.makedirs(cfg.inference.output_dir, exist_ok=True)
     torchaudio.save(output_path, separated, sample_rate)
 
@@ -74,7 +74,7 @@ def run_inference(cfg: DictConfig):
 
     # Push output to W&B as artifact
     if cfg.wandb.enabled and cfg.inference.save_to_wandb:
-        output_artifact = wandb.Artifact(name=f"{cfg.name}_output", type="audio")
+        output_artifact = wandb.Artifact(name=f"{model_name}_output", type="audio")
         output_artifact.add_file(output_path)
         run.log_artifact(output_artifact)
 
