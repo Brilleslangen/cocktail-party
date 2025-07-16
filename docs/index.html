@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cocktail Party Effect</title>
+  <title>Facing to Focus at the Cocktail Party</title>
   <style>
     body {
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -47,23 +47,30 @@
       border: 1px solid #ddd;
       padding: 8px;
       text-align: center;
+      vertical-align: middle;
     }
     img.diagram {
-      max-width: 100%;
+      width: 800px;
       height: auto;
       display: block;
       margin: 10px 0;
     }
+
   </style>
 </head>
 <body>
   <header>
-    <h1>Focus-Directed Speech Isolation</h1>
+    <h1>Facing to Focus at the Cocktail Party</h1>
   </header>
   <main>
     <section>
       <h2>Abstract</h2>
-      <p>Insert here</p>
+      <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Saepe molestias neque incidunt ut maxime quidem vel voluptate ab, ipsum repellat molestiae doloremque vitae, aliquid architecto hic at nobis cum repudiandae.</p>
+    </section>
+        <section>
+      <h2>System Architecture</h2>
+      <img class="diagram" src="img/system-arc.png" alt="System Architecture Diagram">
+
     </section>
     <section>
       <h2>Audio Examples</h2>
@@ -77,48 +84,60 @@
         </thead>
         <tbody>
           <tr>
-            <td>
-              <audio controls src="mix_clip_000503_clip_023575.wav">Your browser does not support audio elements.</audio>
+            <td rowspan="8">
+              <audio controls src="audio/mix_clip_000847_clip_002307.wav"></audio>
             </td>
             <td>L-conv</td>
             <td>
-              <audio controls src="mix_clip_000503_clip_023575_separated_L_conv.wav">Your browser does not support audio elements.</audio>
+              <audio controls src="audio/L-conv-offline_19.88M_mix_clip_000847_clip_002307_separated.wav"></audio>
             </td>
           </tr>
           <tr>
-            <td rowspan="4">
-              <audio controls src="mix_clip_000847_clip_002307.wav">Your browser does not support audio elements.</audio>
-            </td>
             <td>L-transformer</td>
             <td>
-              <audio controls src="mix_clip_000847_clip_002307_separated-L-transformer.wav">Your browser does not support audio elements.</audio>
+              <audio controls src="audio/mix_clip_000847_clip_002307_separated-L-transformer.wav"></audio>
             </td>
           </tr>
           <tr>
             <td>L-mamba</td>
             <td>
-              <audio controls src="mix_clip_000847_clip_002307_separated_L_mamba.wav">Your browser does not support audio elements.</audio>
+              <audio controls src="audio/mix_clip_000847_clip_002307_separated_L_mamba.wav"></audio>
             </td>
           </tr>
           <tr>
             <td>M-mamba</td>
             <td>
-              <audio controls src="mix_clip_000847_clip_002307_separated_M_mamba.wav">Your browser does not support audio elements.</audio>
+              <audio controls src="audio/mix_clip_000847_clip_002307_separated_M_mamba.wav"></audio>
             </td>
           </tr>
           <tr>
             <td>S-mamba</td>
             <td>
-              <audio controls src="mix_clip_000847_clip_002307_separated_S_mamba.wav">Your browser does not support audio elements.</audio>
+              <audio controls src="audio/mix_clip_000847_clip_002307_separated_S_mamba.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-liquid</td>
+            <td>
+              <audio controls src="audio/L-liquid-offline_20.11M_mix_clip_000847_clip_002307_separated.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-liquid</td>
+            <td>
+              <audio controls src="audio/M-liquid-offline_5.10M_mix_clip_000847_clip_002307_separated.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid</td>
+            <td>
+              <audio controls src="audio/S-liquid-offline_1.08M_mix_clip_000847_clip_002307_separated.wav"></audio>
             </td>
           </tr>
         </tbody>
       </table>
     </section>
-    <section>
-      <h2>System Architecture</h2>
-      <img class="diagram" src="system-arc.pdf" alt="Architecture diagram" />
-    </section>
+
   </main>
 </body>
 </html>
