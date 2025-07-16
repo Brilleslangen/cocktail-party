@@ -6,7 +6,7 @@ defaults:
   - override /model_arch/separator: transformer
 
 # adjustments
-name: L-${model_arch.separator.name}-streaming-sym-bidirect
+name: L-${model_arch.separator.name}-streaming-sym-bidirect-2
 
 model_arch:
   separator:
