@@ -6,8 +6,8 @@ streaming_mode: ${model_arch.streaming_mode}
 context_size_ms: ${model_arch.stream_chunk_size_ms}
 
 # Input/output sizes (e.g. 64-dim features, 2 speakers)
-input_dim: 64
-output_dim: 2
+input_dim: 64  # Not utilized when applied in tasnet, that overrides this value
+output_dim: 2   # same for this
 pos_enc: false  # Only for transformer
 
 # Base scaling constants
