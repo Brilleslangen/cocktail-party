@@ -5,13 +5,12 @@ defaults:
   - /wandb: default
   - _self_
 
-model_artifact: L-conv-offline_19.88M:v0
-name: L-conv-offline-inference
+model_artifact: none
 
 
 inference:
-  input_audio_file: "test/mixture/mix_clip_000847_clip_002307.wav"
-  output_audio_file: "mix_clip_000847_clip_002307_separated.wav"
+  input_audio_file: "test\\mixture\\mix_clip_002924_clip_011392.wav"
+  output_audio_file: "mix_clip_002924_clip_011392.wav"
   output_dir: "outputs/inference"
   save_to_wandb: false
 
@@ -21,3 +20,21 @@ wandb:
 
 hydra:
   mode: MULTIRUN
+  sweeper:
+    params:
+      model_artifact:
+        # L-conv-offline_19.88M:v0,
+        # S-liquid-offline_1.08M:v0,
+        # M-liquid-offline_5.10M:v0,
+        # L-liquid-offline_20.11M:v0,
+        # L-transformer-offline_19.84M:v0
+        L-mamba-offline_19.74M:v0,
+        M-mamba-offline_5.11M:v0,
+        S-mamba-offline_1.10M:v0
+
+
+training:
+  params:
+    batch_size: 1
+    use_amp: false
+    num_workers: 10
