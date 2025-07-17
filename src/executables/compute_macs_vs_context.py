@@ -5,6 +5,7 @@ import hydra
 import numpy as np
 from pathlib import Path
 
+import wandb
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
@@ -12,7 +13,7 @@ from src.evaluate import count_macs
 from src.helpers import prettify_macs, setup_device_optimizations
 
 
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="jobs/compute_macs_context")
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="runs/efficiency/compute_macs_context")
 def main(cfg: DictConfig):
     """
     Compute MACs for different context sizes for large streaming models.
@@ -47,9 +48,9 @@ def main(cfg: DictConfig):
 
         # Process each model
         for model_name in models_to_eval:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"Processing model: {model_name}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             # Load the specific streaming config
             model_cfg = hydra.compose(config_name=f"runs/streaming/{model_name}")
@@ -118,9 +119,23 @@ def main(cfg: DictConfig):
                     print(f"    Error: {str(e)}")
                     continue
 
-    print(f"\n{'='*60}")
+    with wandb.init(project=cfg.wandb.project, entity=cfg.wandb.entity, job_type="publish-csv") as run:
+        artifact = wandb.Artifact(
+            name="macs_vs_context",
+            type="csv",
+            description="macs_vs_context_size.csv - MACs vs Context Size for Large Streaming Models"
+        )
+
+        csv_path_abs = os.path.abspath(csv_path)
+        assert os.path.isfile(csv_path_abs), f"File does not exist: {csv_path_abs}"
+
+        artifact.add_file(csv_path_abs)
+        run.log_artifact(artifact)
+        run.finish()
+
+    print(f"\n{'=' * 60}")
     print(f"Results saved to: {csv_path}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

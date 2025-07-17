@@ -12,6 +12,7 @@ from src.data.streaming import Streamer
 from src.evaluate.train_metrics import compute_si_sdr_i, compute_SI_SDRs, compute_SDRs, \
     per_sample_sdr
 from src.evaluate.pkg_funcs import compute_energy_weights, parallel_batch_metric_with_lengths
+from src.helpers import ms_to_samples
 
 try:
     from binaqual import calculate_binaqual
@@ -353,8 +354,39 @@ def compute_confusion_rate(
     return confusion
 
 
+def compute_rtf_streaming(model: nn.Module, seconds: float = 10.0) -> float:
+    device = next(model.parameters()).device
+    sr = getattr(model, "sample_rate", 16000)
+    streaming = getattr(model, "streaming_mode", False)
+
+    if not streaming:
+        raise NotImplementedError("RTF computation for non-streaming models is not implemented.")
+
+    window_size = model.input_size
+    step_size = model.output_size
+    total_samples = int(sr * seconds)
+
+    # Pad total_samples to allow the last chunk to be a full window
+    pad = (window_size - step_size) if total_samples < window_size else 0
+    full_dummy = torch.randn(1, 2, total_samples + pad, device=device)
+
+    if device.type == 'cuda':
+        torch.cuda.synchronize()
+    with torch.no_grad():
+        start = time.perf_counter()
+        for i in range(window_size, full_dummy.shape[-1] + 1, step_size):
+            dummy = full_dummy[..., i - window_size : i]
+            _ = model(dummy)
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+        end = time.perf_counter()
+        time_taken = end - start
+
+    return time_taken / seconds  # RTF
+
+
 def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
-                num_runs: int = 10, device: torch.device = None, streaming_mode=False) -> float:
+               num_runs: int = 10, device: torch.device = None, streaming_mode=False) -> float:
     """
     Compute Real-Time Factor (RTF) - processing_time / audio_duration.
     RTF < 1.0 means faster than real-time.
@@ -376,17 +408,10 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
     num_samples = int(audio_duration * sample_rate)
     dummy_input = torch.randn(batch_size, 2, num_samples, device=device)
 
-    streamer = Streamer(model) if streaming_mode else None
-
     # Warmup
     with torch.no_grad():
         for _ in range(3):
-            if streaming_mode:
-                # If the model is in streaming mode, use the streamer to process the input
-                _ = streamer.stream_batch(dummy_input, dummy_input,
-                                          torch.tensor([num_samples] * batch_size, device=device))
-            else:
-                _ = model(dummy_input)
+            _ = model(dummy_input)
 
     # Time the inference
     if device.type == 'cuda':
@@ -395,11 +420,10 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
     times = []
     with torch.no_grad():
         for _ in range(num_runs):
-            start = time.perf_counter()
             if streaming_mode:
-                _ = streamer.stream_batch(dummy_input, dummy_input,
-                                          torch.tensor([num_samples] * batch_size, device=device))
+                raise NotImplementedError("RTF computation for streaming models is not implemented.")
             else:
+                start = time.perf_counter()
                 _ = model(dummy_input)
             if device.type == 'cuda':
                 torch.cuda.synchronize()
@@ -409,7 +433,7 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
     avg_time = np.mean(times)
     rtf = avg_time / audio_duration
 
-    return rtf*156
+    return rtf * 156
 
 
 def compute_evaluation_metrics(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor,

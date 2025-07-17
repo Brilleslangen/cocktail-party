@@ -5,10 +5,6 @@ defaults:
   - /wandb: default
   - _self_
 
-# Disable wandb for this computation
-wandb:
-  enabled: false
-
 # Use CPU to avoid GPU allocation for simple MAC counting
 training:
   params:
@@ -17,4 +13,4 @@ training:
     num_workers: 0
 
 # Group name for organization
-group: macs-computation
+group: efficiency
