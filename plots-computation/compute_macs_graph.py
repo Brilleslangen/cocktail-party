@@ -1,14 +1,17 @@
+import hydra
 import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
 import numpy as np
+import wandb
+from omegaconf import DictConfig
 
 # Define nice colors for each model (Plotly hex codes are fine)
 model_colors = {
-    'l-conv-sym': '#1f77b4',        # Blue
-    'l-mamba-sym': '#ff7f0e',       # Orange
-    'l-transformer-sym': '#2ca02c', # Green
-    'l-liquid-sym': '#d62728'       # Red
+    'l-conv-sym': '#1f77b4',  # Blue
+    'l-mamba-sym': '#ff7f0e',  # Orange
+    'l-transformer-sym': '#2ca02c',  # Green
+    'l-liquid-sym': '#d62728'  # Red
 }
 
 # Define nice names for legend
@@ -20,15 +23,27 @@ model_names = {
 }
 
 
-def main():
+@hydra.main(version_base="1.3", config_path="../configs", config_name="runs/efficiency/compute_macs_context")
+def main(cfg: DictConfig):
     # Read the CSV file
-    csv_path = Path("evaluation_outputs/macs_vs_context_size.csv")
-    if not csv_path.exists():
-        print(f"Error: CSV file not found at {csv_path}")
-        print("Please run 'python -m src.executables.compute_macs_vs_context' first.")
-        return
+    run = wandb.init(
+        project=cfg.wandb.project,
+        entity=cfg.wandb.entity,
+        job_type='analysis',
+        name='macs_vs_context_download'
+    )
+
+    # Suppose you set this in your config:
+    # cfg.csv_artifact = "your-entity/your-project/macs_vs_context:latest"
+    artifact = run.use_artifact("macs_vs_context:latest", type="csv")
+    artifact_dir = artifact.download(root="artifacts")
+    csv_candidates = list(Path(artifact_dir).glob("*.csv"))
+    if not csv_candidates:
+        raise FileNotFoundError(f"No CSV file found in artifact at {artifact_dir}")
+    csv_path = str(csv_candidates[0])
 
     df = pd.read_csv(csv_path)
+    print(df)
     x_min = df['context_size_ms'].min()
     x_max = df['context_size_ms'].max()
 
@@ -179,8 +194,10 @@ def main():
     for model in models:
         model_data = df[df['model'] == model]
         print(f"\n{model_names.get(model, model)}:")
-        print(f"  Min GMACs: {model_data['gmacs'].min():.3f} (at {model_data.loc[model_data['gmacs'].idxmin(), 'context_size_ms']:.0f}ms)")
-        print(f"  Max GMACs: {model_data['gmacs'].max():.3f} (at {model_data.loc[model_data['gmacs'].idxmax(), 'context_size_ms']:.0f}ms)")
+        print(
+            f"  Min GMACs: {model_data['gmacs'].min():.3f} (at {model_data.loc[model_data['gmacs'].idxmin(), 'context_size_ms']:.0f}ms)")
+        print(
+            f"  Max GMACs: {model_data['gmacs'].max():.3f} (at {model_data.loc[model_data['gmacs'].idxmax(), 'context_size_ms']:.0f}ms)")
         print(f"  Range: {model_data['gmacs'].max() - model_data['gmacs'].min():.3f} GMACs")
         pct_increase = ((model_data['gmacs'].max() - model_data['gmacs'].min()) / model_data['gmacs'].min()) * 100
         print(f"  Increase: {pct_increase:.1f}%")
