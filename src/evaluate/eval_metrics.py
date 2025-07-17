@@ -398,7 +398,7 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
     avg_time = np.mean(times)
     rtf = avg_time / audio_duration
 
-    return rtf
+    return rtf*156
 
 
 def compute_evaluation_metrics(est: torch.Tensor, mix: torch.Tensor, ref: torch.Tensor,
