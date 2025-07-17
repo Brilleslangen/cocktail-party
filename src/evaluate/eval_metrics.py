@@ -372,6 +372,8 @@ def compute_rtf_streaming(model: nn.Module, seconds: float = 10.0) -> float:
 
     if device.type == 'cuda':
         torch.cuda.synchronize()
+
+    num_steps = (full_dummy.shape[-1] - window_size) // step_size + 1
     with torch.no_grad():
         start = time.perf_counter()
         for i in range(window_size, full_dummy.shape[-1] + 1, step_size):
@@ -382,7 +384,7 @@ def compute_rtf_streaming(model: nn.Module, seconds: float = 10.0) -> float:
         end = time.perf_counter()
         time_taken = end - start
 
-    return time_taken / seconds  # RTF
+    return time_taken / (seconds / num_steps)  # RTF
 
 
 def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
