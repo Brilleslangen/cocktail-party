@@ -1,44 +1,47 @@
 import numpy as np
 import plotly.graph_objects as go
 
-# Example dictionary: {"Model Name": MACs in GMAC/s}
-# mac_dict = {
-#     "S-conv-sym": 0.99517,
-#     "S-transformer-sym": 0.80942,
-#     "S-mamba-sym": 0.82096,
-#     "S-liquid-sym": 0.7786,
-#
-#     "S-mamba-short-asym": 1.09,
-#
-#     "L-transformer-sym": 14.87,
-#     "L-mamba-sym": 14.76,
-#     "L-liquid-sym": 15.06,
-#
-#     "S-conv-asym": 4.90,
-#     "S-transformer-asym": 4.91,
-#     "S-mamba-asym": 4.90,
-#     "S-liquid-asym": 4.64,
-# }
+# ============================================================
+# | Model              |   GMAC/s |
+# |--------------------|----------|
+# | l-conv-sym         | 15.66538 |
+# | l-mamba-sym        | 14.76449 |
+# | l-transformer-sym  | 14.87042 |
+# | l-liquid-sym       | 15.05877 |
+# | s-conv-sym         |  0.99517 |
+# | s-mamba-sym        |  0.82096 |
+# | s-transformer-sym  |  0.80942 |
+# | s-liquid-sym       |  0.77868 |
+# | s-conv-asym        |  4.89573 |
+# | s-mamba-asym       |  4.89502 |
+# | s-transformer-asym |  4.90679 |
+# | s-liquid-asym      |  4.64133 |
+# | s-mamba-short-asym |  1.09256 |
+# ============================================================
 
 sym_mac_dict = {
-    "S-conv-sym": 0.99517,
-    "S-transformer-sym": 0.80942,
-    "S-mamba-sym": 0.82096,
-    "S-liquid-sym": 0.7786,
+    "s-conv-sym": 0.99517,
+    "s-transformer-sym": 0.80942,
+    "s-mamba-sym": 0.82096,
+    "s-liquid-sym": 0.77868,
 }
+
 short_mac_dict = {
-    "S-mamba-short-asym": 1.09,
+    "s-mamba-short-asym": 1.09256,
 }
+
 large_mac_dict = {
-    "L-transformer-sym": 14.87,
-    "L-mamba-sym": 14.76,
-    "L-liquid-sym": 15.06,
+    "l-conv-sym": 15.66538,
+    "l-mamba-sym": 14.76449,
+    "l-transformer-sym": 14.87042,
+    "l-liquid-sym": 15.05877,
 }
+
 asym_mac_dict = {
-    "S-conv-asym": 4.90,
-    "S-transformer": 4.91,
-    "S-mamba-asym": 4.90,
-    "S-liquid-asym": 4.64,
+    "s-conv-asym": 4.89573,
+    "s-mamba-asym": 4.89502,
+    "s-transformer-asym": 4.90679,
+    "s-liquid-asym": 4.64133,
 }
 # Two spacers for more visible group separation
 spacer = {"": None}
