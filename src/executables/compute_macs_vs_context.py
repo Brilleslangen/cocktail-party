@@ -19,9 +19,7 @@ def main(cfg: DictConfig):
     Compute MACs for different context sizes for large streaming models.
     """
     # Models to evaluate
-    models_to_eval = ['l-conv-sym', 'l-mamba-sym', 'l-transformer-sym', 'l-liquid-sym',
-                      'l-conv-asym', 'l-mamba-asym', 'l-transformer-asym', 'l-liquid-asym',
-                      's-conv-sym', 's-mamba-sym', 's-transformer-sym', 's-liquid-sym',
+    models_to_eval = ['l-conv-asym', 'l-mamba-asym', 'l-transformer-asym', 'l-liquid-asym',
                       's-conv-asym', 's-mamba-asym', 's-transformer-asym', 's-liquid-asym']
 
     # Context sizes to test (in ms)
