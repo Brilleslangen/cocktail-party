@@ -95,48 +95,6 @@ def main(cfg: DictConfig):
     fig.write_html("plots_computation/macs_vs_context_size.html")
     print("Saved plot to plots_computation/macs_vs_context_size.png/.html")
 
-    # 2. Log scale plot
-    fig_log = go.Figure()
-    for model in models:
-        model_data = df[df['model'] == model].sort_values('context_size_ms')
-        fig_log.add_trace(
-            go.Scatter(
-                x=model_data['context_size_ms'],
-                y=model_data['gmacs'],
-                mode='lines+markers',
-                name=model_names.get(model, model),
-                line=dict(color=model_colors.get(model, None), width=3),
-                marker=dict(size=10),
-                opacity=0.95
-            )
-        )
-
-    fig_log.update_layout(
-        title='Computational Cost vs Context Size (Log Scale)',
-        xaxis_title='Context Size (ms)',
-        yaxis_title='Computational Cost (GMACs/s) - Log Scale',
-        xaxis=dict(
-            autorange='reversed',
-            tickmode='array',
-            tickvals=x_vals,
-            tickfont=dict(size=14)
-        ),
-        yaxis=dict(
-            type='log',
-            rangemode='tozero',
-            tickfont=dict(size=14)
-        ),
-        legend=dict(
-            font=dict(size=14),
-            bgcolor='rgba(255,255,255,0.8)',
-            bordercolor='black',
-            borderwidth=1
-        ),
-        width=1000,
-        height=700,
-        margin=dict(l=60, r=40, t=70, b=60)
-    )
-
     fig.add_annotation(
         x=0,
         y=256,
@@ -179,13 +137,8 @@ def main(cfg: DictConfig):
         font=dict(color="red", size=18)  # Larger text size here!
     )
 
-    fig_log.write_image("plots_computation/macs_vs_context_size_log.png", scale=2)
-    fig_log.write_html("plots_computation/macs_vs_context_size_log.html")
-    print("Saved log-scale plot to plots_computation/macs_vs_context_size_log.png/.html")
-
     # Show plot in browser (interactive)
     fig.show()
-    fig_log.show()
 
     # Print summary statistics
     print("\n" + "=" * 60)
