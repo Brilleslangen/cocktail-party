@@ -95,17 +95,6 @@ def main(cfg: DictConfig):
     fig.write_html("plots_computation/macs_vs_context_size.html")
     print("Saved plot to plots_computation/macs_vs_context_size.png/.html")
 
-    fig.add_annotation(
-        x=0,
-        y=256,
-        xanchor="left",
-        yanchor="bottom",
-        xshift=-15,
-        text="256 GMAC/s: Ethos U-85 LOW",
-        showarrow=False,
-        font=dict(color="red", size=18)  # Larger text size here!
-    )
-
     fig.add_shape(
         type='line',
         x0=x_min,
@@ -127,14 +116,27 @@ def main(cfg: DictConfig):
     )
 
     fig.add_annotation(
-        x=0,
-        y=2048,
+        x=0,  # far left of plotting area
+        y=256,
+        xref="paper",
+        yref="y",
         xanchor="left",
         yanchor="bottom",
-        xshift=-15,
+        text="256 GMAC/s: Ethos U-85 LOW",
+        showarrow=False,
+        font=dict(color="red", size=18)
+    )
+
+    fig.add_annotation(
+        x=1,  # far right of plotting area
+        y=2048,
+        xref="paper",
+        yref="y",
+        xanchor="right",
+        yanchor="bottom",
         text="2048 GMAC/s: Ethos U-85 MAX",
         showarrow=False,
-        font=dict(color="red", size=18)  # Larger text size here!
+        font=dict(color="red", size=18)
     )
 
     # Show plot in browser (interactive)

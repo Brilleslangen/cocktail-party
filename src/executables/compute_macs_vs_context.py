@@ -33,9 +33,6 @@ def main(cfg: DictConfig):
     output_dir.mkdir(exist_ok=True)
     csv_path = output_dir / "macs_vs_context_size.csv"
 
-    # Setup device
-    device, use_amp, amp_dtype = setup_device_optimizations(cfg)
-
     # Open CSV file for writing
     with open(csv_path, 'w', newline='') as csvfile:
         fieldnames = ['model', 'context_size_ms', 'macs', 'gmacs', 'pretty_macs']
@@ -55,6 +52,12 @@ def main(cfg: DictConfig):
             print(f"\n{'=' * 60}")
             print(f"Processing model: {model_name}")
             print(f"{'=' * 60}")
+
+            # Setup device
+            device, use_amp, amp_dtype = setup_device_optimizations(cfg)
+
+            if "mamba" in model_name:
+                device = torch.device("cuda")
 
             # Load the specific streaming config
             model_cfg = hydra.compose(config_name=f"runs/streaming/{model_name}")
