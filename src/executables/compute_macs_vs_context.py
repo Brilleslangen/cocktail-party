@@ -25,7 +25,7 @@ def main(cfg: DictConfig):
 
 
     # Context sizes to test (in ms)
-    context_sizes_ms = np.arange(1000, 50, -50).tolist()  # 1000ms down to 50ms in 50ms steps
+    context_sizes_ms = np.arange(1000, 40, -50).tolist()  # 1000ms down to 50ms in 50ms steps
 
     # Setup output directory and CSV file
     output_dir = Path("evaluation_outputs")

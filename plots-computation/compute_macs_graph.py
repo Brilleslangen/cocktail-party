@@ -91,26 +91,27 @@ def main(cfg: DictConfig):
         height=700,
         margin=dict(l=60, r=40, t=70, b=60)
     )
-    fig.write_image("plots_computation/macs_vs_context_size.png", scale=2)
-    fig.write_html("plots_computation/macs_vs_context_size.html")
-    print("Saved plot to plots_computation/macs_vs_context_size.png/.html")
 
     fig.add_shape(
         type='line',
-        x0=x_min,
-        x1=x_max,
+        x0=0,
+        x1=1,
         y0=256,
         y1=256,
+        xref='paper',  # << key!
+        yref='y',
         line=dict(color='red', dash='dash'),
         layer="above"
     )
 
     fig.add_shape(
         type='line',
-        x0=x_min,
-        x1=x_max,
+        x0=0,
+        x1=1,
         y0=2048,
         y1=2048,
+        xref='paper',
+        yref='y',
         line=dict(color='red', dash='dash'),
         layer="above"
     )
@@ -138,6 +139,36 @@ def main(cfg: DictConfig):
         showarrow=False,
         font=dict(color="red", size=18)
     )
+
+    fig.add_shape(
+        type="rect",
+        x0=0,
+        x1=1,
+        xref="paper",
+        y0=256,
+        y1=3000,
+        yref="y",
+        fillcolor="rgba(255, 0, 0, 0.1)",
+        line=dict(width=0),
+        layer="below"
+    )
+
+    fig.add_shape(
+        type="rect",
+        x0=0,
+        x1=1,
+        xref="paper",
+        y0=2048,
+        y1=3000,
+        yref="y",
+        fillcolor="rgba(255, 0, 0, 0.2)",
+        line=dict(width=0),
+        layer="below"
+    )
+
+    fig.write_image("plots_computation/macs_vs_context_size.png", scale=2)
+    fig.write_html("plots_computation/macs_vs_context_size.html")
+    print("Saved plot to plots_computation/macs_vs_context_size.png/.html")
 
     # Show plot in browser (interactive)
     fig.show()
