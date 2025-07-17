@@ -8,6 +8,10 @@ import plotly.graph_objects as go
 # | l-mamba-sym        | 14.76449 |
 # | l-transformer-sym  | 14.87042 |
 # | l-liquid-sym       | 15.05877 |
+# | l-conv-asym        | 89.29738 |
+# | l-mamba-asym       | 88.55624 |
+# | l-transformer-asym | 89.55902 |
+# | l-liquid-asym      | 90.32193 |
 # | s-conv-sym         |  0.99517 |
 # | s-mamba-sym        |  0.82096 |
 # | s-transformer-sym  |  0.80942 |
@@ -19,29 +23,35 @@ import plotly.graph_objects as go
 # | s-mamba-short-asym |  1.09256 |
 # ============================================================
 
-sym_mac_dict = {
-    "s-conv-sym": 0.99517,
-    "s-transformer-sym": 0.80942,
-    "s-mamba-sym": 0.82096,
-    "s-liquid-sym": 0.77868,
-}
-
-short_mac_dict = {
-    "s-mamba-short-asym": 1.09256,
-}
-
-large_mac_dict = {
+# Large models (L)
+large_sym_mac_dict = {
     "l-conv-sym": 15.66538,
     "l-mamba-sym": 14.76449,
     "l-transformer-sym": 14.87042,
     "l-liquid-sym": 15.05877,
 }
+large_asym_mac_dict = {
+    "l-conv-asym": 89.29738,
+    "l-mamba-asym": 88.55624,
+    "l-transformer-asym": 89.55902,
+    "l-liquid-asym": 90.32193,
+}
 
-asym_mac_dict = {
+# Small models (S)
+small_sym_mac_dict = {
+    "s-conv-sym": 0.99517,
+    "s-mamba-sym": 0.82096,
+    "s-transformer-sym": 0.80942,
+    "s-liquid-sym": 0.77868,
+}
+small_asym_mac_dict = {
     "s-conv-asym": 4.89573,
     "s-mamba-asym": 4.89502,
     "s-transformer-asym": 4.90679,
     "s-liquid-asym": 4.64133,
+}
+small_short_mac_dict = {
+    "s-mamba-short-asym": 1.09256,
 }
 # Two spacers for more visible group separation
 spacer = {"": None}
@@ -49,11 +59,12 @@ double_spacer = {"": None, " ": None}
 
 # Merge for plotting with double spacers
 plot_dict = {}
-plot_dict.update(sym_mac_dict)
+plot_dict.update(small_sym_mac_dict)
+plot_dict.update(small_short_mac_dict)
 plot_dict.update(double_spacer)
-plot_dict.update(short_mac_dict)
+plot_dict.update(small_asym_mac_dict)
 plot_dict.update(double_spacer)
-plot_dict.update(large_mac_dict)
+plot_dict.update()
 plot_dict.update(double_spacer)
 plot_dict.update(asym_mac_dict)
 
