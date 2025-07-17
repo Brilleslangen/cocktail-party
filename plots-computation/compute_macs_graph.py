@@ -65,7 +65,7 @@ def main(cfg: DictConfig):
         row_heights=[0.5, 0.5],
         horizontal_spacing=0.04,
         vertical_spacing=0.03,
-        subplot_titles=["All Models", "Small Models (S-*)"]
+        subplot_titles=["All Models - Asymmetric Windows - Chunk Length 4 ms", "Small Models Magnified"]
     )
 
     # --- Left Plot: All Models (tall, row=1:2, col=1) ---
@@ -160,7 +160,7 @@ def main(cfg: DictConfig):
         y0=256,
         y1=3010,
         yref="y",
-        fillcolor="rgba(255, 0, 0, 0.10)",  # slightly transparent red
+        fillcolor="rgba(255, 0, 0, 0.10)",
         line=dict(width=0),
         layer="below"
     )
@@ -173,7 +173,7 @@ def main(cfg: DictConfig):
         y0=2048,
         y1=3010,
         yref="y",
-        fillcolor="rgba(255, 0, 0, 0.15)",  # a bit stronger for higher region
+        fillcolor="rgba(255, 0, 0, 0.15)",
         line=dict(width=0),
         layer="below"
     )
@@ -185,7 +185,7 @@ def main(cfg: DictConfig):
         xshift=-200,
         xanchor="left",
         yanchor="bottom",
-        text="256 GMAC/s: Ethos U-85 LOW",
+        text="256 GMAC/s: Ethos-U85 LOW",
         showarrow=False,
         font=dict(color="darkred", size=18),
         row=1, col=1
@@ -197,7 +197,7 @@ def main(cfg: DictConfig):
         yref="y",
         xanchor="right",
         yanchor="bottom",
-        text="2048 GMAC/s: Ethos U-85 MAX",
+        text="2048 GMAC/s: Ethos-U85 MAX",
         showarrow=False,
         font=dict(color="darkred", size=18),
         row=1, col=1,
@@ -224,14 +224,13 @@ def main(cfg: DictConfig):
         yanchor="bottom",
         text="""<span style='display: block; text-align: right;'>3.85 GMAC/s:          <br>DEEP SONIC (in use)</span>""",
         showarrow=False,
-        font=dict(color="darkred", size=12),
+        font=dict(color="darkred", size=14),
         row=2, col=2,
         xshift=80
     )
 
     # --- Layout ---
     fig.update_layout(
-        title='Computational Cost vs Context Size',
         xaxis=dict(
             autorange='reversed',
             tickmode='array',
@@ -281,10 +280,10 @@ def main(cfg: DictConfig):
         margin=dict(l=60, r=40, t=70, b=60),
     )
 
-    Path("plots_computation").mkdir(exist_ok=True)
-    fig.write_image("plots_computation/macs_vs_context_size_sbs.png", scale=2)
-    fig.write_html("plots_computation/macs_vs_context_size_sbs.html")
-    print("Saved plot to plots_computation/macs_vs_context_size_sbs.png/.html")
+    Path("plots-computation/outputs").mkdir(exist_ok=True)
+    fig.write_image("plots-computation/outputs/macs_vs_context_size_sbs.png", scale=2)
+    fig.write_html("plots-computation/outputs/macs_vs_context_size_sbs.html")
+    print("Saved plot to plots-computation/outputs/macs_vs_context_size_sbs.png/.html")
     fig.show()
 
     # Print summary statistics
@@ -304,5 +303,5 @@ def main(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    Path("plots_computation").mkdir(exist_ok=True)
+    Path("plots-computation").mkdir(exist_ok=True)
     main()
