@@ -7,5 +7,11 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      runs/streaming: ghost_targets, s-mamba-sym, s-liquid-sym, s-transformer-sym, l-mamba-sym, l-liquid-sym, l-transformer-sym, 
-        s-transformer-asym, s-mamba-asym, s-liquid-asym, s-mamba-short-asym, s-conv-sym, s-conv-asym
+      runs/streaming: s-mamba-asym, s-liquid-asym, l-transformer-sym
+
+
+        #S-mamba-streaming-asym-bidirect_1.10M, S-liquid-streaming-asym-bidirect_1.04M, L-transformer-streaming-sym-bidirect_19.84M
+
+
+#        ghost_targets, s-mamba-sym, s-liquid-sym, s-transformer-sym, l-mamba-sym, l-liquid-sym, l-transformer-sym,
+#        s-transformer-asym, s-mamba-asym, s-liquid-asym, s-mamba-short-asym, s-conv-sym, s-conv-asym
