@@ -1,0 +1,191 @@
+import pandas as pd
+import plotly.graph_objects as go
+from pathlib import Path
+import numpy as np
+
+# Define nice colors for each model (Plotly hex codes are fine)
+model_colors = {
+    'l-conv-sym': '#1f77b4',        # Blue
+    'l-mamba-sym': '#ff7f0e',       # Orange
+    'l-transformer-sym': '#2ca02c', # Green
+    'l-liquid-sym': '#d62728'       # Red
+}
+
+# Define nice names for legend
+model_names = {
+    'l-conv-sym': 'L-TCN',
+    'l-mamba-sym': 'L-Mamba',
+    'l-transformer-sym': 'L-Transformer',
+    'l-liquid-sym': 'L-Liquid'
+}
+
+
+def main():
+    # Read the CSV file
+    csv_path = Path("evaluation_outputs/macs_vs_context_size.csv")
+    if not csv_path.exists():
+        print(f"Error: CSV file not found at {csv_path}")
+        print("Please run 'python -m src.executables.compute_macs_vs_context' first.")
+        return
+
+    df = pd.read_csv(csv_path)
+    x_min = df['context_size_ms'].min()
+    x_max = df['context_size_ms'].max()
+
+    # Sort models for consistent order
+    models = [m for m in model_names if m in df['model'].unique()]
+    x_vals = np.arange(1000, 0, -100)
+
+    # 1. Linear scale plot
+    fig = go.Figure()
+    for model in models:
+        model_data = df[df['model'] == model].sort_values('context_size_ms')
+        fig.add_trace(
+            go.Scatter(
+                x=model_data['context_size_ms'],
+                y=model_data['gmacs'],
+                mode='lines+markers',
+                name=model_names.get(model, model),
+                line=dict(color=model_colors.get(model, None), width=3),
+                marker=dict(size=10),
+                opacity=0.95
+            )
+        )
+
+    fig.update_layout(
+        title='Computational Cost vs Context Size for Large Streaming Models',
+        xaxis_title='Context Size (ms)',
+        yaxis_title='Computational Cost (GMACs/s)',
+        xaxis=dict(
+            autorange='reversed',
+            tickmode='array',
+            tickvals=x_vals,
+            tickfont=dict(size=14)
+        ),
+        yaxis=dict(
+            rangemode='tozero',
+            tickfont=dict(size=14)
+        ),
+        legend=dict(
+            font=dict(size=14),
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='black',
+            borderwidth=1
+        ),
+        width=1000,
+        height=700,
+        margin=dict(l=60, r=40, t=70, b=60)
+    )
+    fig.write_image("plots_computation/macs_vs_context_size.png", scale=2)
+    fig.write_html("plots_computation/macs_vs_context_size.html")
+    print("Saved plot to plots_computation/macs_vs_context_size.png/.html")
+
+    # 2. Log scale plot
+    fig_log = go.Figure()
+    for model in models:
+        model_data = df[df['model'] == model].sort_values('context_size_ms')
+        fig_log.add_trace(
+            go.Scatter(
+                x=model_data['context_size_ms'],
+                y=model_data['gmacs'],
+                mode='lines+markers',
+                name=model_names.get(model, model),
+                line=dict(color=model_colors.get(model, None), width=3),
+                marker=dict(size=10),
+                opacity=0.95
+            )
+        )
+
+    fig_log.update_layout(
+        title='Computational Cost vs Context Size (Log Scale)',
+        xaxis_title='Context Size (ms)',
+        yaxis_title='Computational Cost (GMACs/s) - Log Scale',
+        xaxis=dict(
+            autorange='reversed',
+            tickmode='array',
+            tickvals=x_vals,
+            tickfont=dict(size=14)
+        ),
+        yaxis=dict(
+            type='log',
+            rangemode='tozero',
+            tickfont=dict(size=14)
+        ),
+        legend=dict(
+            font=dict(size=14),
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor='black',
+            borderwidth=1
+        ),
+        width=1000,
+        height=700,
+        margin=dict(l=60, r=40, t=70, b=60)
+    )
+
+    fig.add_annotation(
+        x=0,
+        y=256,
+        xanchor="left",
+        yanchor="bottom",
+        xshift=-15,
+        text="256 GMAC/s: Ethos U-85 LOW",
+        showarrow=False,
+        font=dict(color="red", size=18)  # Larger text size here!
+    )
+
+    fig.add_shape(
+        type='line',
+        x0=x_min,
+        x1=x_max,
+        y0=256,
+        y1=256,
+        line=dict(color='red', dash='dash'),
+        layer="above"
+    )
+
+    fig.add_shape(
+        type='line',
+        x0=x_min,
+        x1=x_max,
+        y0=2048,
+        y1=2048,
+        line=dict(color='red', dash='dash'),
+        layer="above"
+    )
+
+    fig.add_annotation(
+        x=0,
+        y=2048,
+        xanchor="left",
+        yanchor="bottom",
+        xshift=-15,
+        text="2048 GMAC/s: Ethos U-85 MAX",
+        showarrow=False,
+        font=dict(color="red", size=18)  # Larger text size here!
+    )
+
+    fig_log.write_image("plots_computation/macs_vs_context_size_log.png", scale=2)
+    fig_log.write_html("plots_computation/macs_vs_context_size_log.html")
+    print("Saved log-scale plot to plots_computation/macs_vs_context_size_log.png/.html")
+
+    # Show plot in browser (interactive)
+    fig.show()
+    fig_log.show()
+
+    # Print summary statistics
+    print("\n" + "=" * 60)
+    print("Summary Statistics")
+    print("=" * 60)
+    for model in models:
+        model_data = df[df['model'] == model]
+        print(f"\n{model_names.get(model, model)}:")
+        print(f"  Min GMACs: {model_data['gmacs'].min():.3f} (at {model_data.loc[model_data['gmacs'].idxmin(), 'context_size_ms']:.0f}ms)")
+        print(f"  Max GMACs: {model_data['gmacs'].max():.3f} (at {model_data.loc[model_data['gmacs'].idxmax(), 'context_size_ms']:.0f}ms)")
+        print(f"  Range: {model_data['gmacs'].max() - model_data['gmacs'].min():.3f} GMACs")
+        pct_increase = ((model_data['gmacs'].max() - model_data['gmacs'].min()) / model_data['gmacs'].min()) * 100
+        print(f"  Increase: {pct_increase:.1f}%")
+
+
+if __name__ == "__main__":
+    Path("plots_computation").mkdir(exist_ok=True)
+    main()

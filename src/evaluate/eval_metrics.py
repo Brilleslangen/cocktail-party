@@ -7,6 +7,8 @@ import torch.nn as nn
 from torch.utils.flop_counter import FlopCounterMode
 
 from torchmetrics.audio import PerceptualEvaluationSpeechQuality, ShortTimeObjectiveIntelligibility
+
+from src.data.streaming import Streamer
 from src.evaluate.train_metrics import compute_si_sdr_i, compute_SI_SDRs, compute_SDRs, \
     per_sample_sdr
 from src.evaluate.pkg_funcs import compute_energy_weights, parallel_batch_metric_with_lengths
@@ -352,7 +354,7 @@ def compute_confusion_rate(
 
 
 def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
-                num_runs: int = 10, device: torch.device = None) -> float:
+                num_runs: int = 10, device: torch.device = None, streaming_mode=False) -> float:
     """
     Compute Real-Time Factor (RTF) - processing_time / audio_duration.
     RTF < 1.0 means faster than real-time.
@@ -372,14 +374,19 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
 
     sample_rate = model.sample_rate
     num_samples = int(audio_duration * sample_rate)
-
-    # Create dummy input
     dummy_input = torch.randn(batch_size, 2, num_samples, device=device)
+
+    streamer = Streamer(model) if streaming_mode else None
 
     # Warmup
     with torch.no_grad():
         for _ in range(3):
-            _ = model(dummy_input)
+            if streaming_mode:
+                # If the model is in streaming mode, use the streamer to process the input
+                _ = streamer.stream_batch(dummy_input, dummy_input,
+                                          torch.tensor([num_samples] * batch_size, device=device))
+            else:
+                _ = model(dummy_input)
 
     # Time the inference
     if device.type == 'cuda':
@@ -389,7 +396,11 @@ def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
     with torch.no_grad():
         for _ in range(num_runs):
             start = time.perf_counter()
-            _ = model(dummy_input)
+            if streaming_mode:
+                _ = streamer.stream_batch(dummy_input, dummy_input,
+                                          torch.tensor([num_samples] * batch_size, device=device))
+            else:
+                _ = model(dummy_input)
             if device.type == 'cuda':
                 torch.cuda.synchronize()
             end = time.perf_counter()
