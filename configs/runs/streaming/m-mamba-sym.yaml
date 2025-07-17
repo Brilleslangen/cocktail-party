@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - m-transformer-sym
+  - _self_
+
+  - override /model_arch/separator: mamba
+
+# adjustments
+name: M-${model_arch.separator.name}-streaming-sym-bidirect
