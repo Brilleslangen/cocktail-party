@@ -8,7 +8,7 @@ defaults:
 # Use CPU to avoid GPU allocation for simple MAC counting
 training:
   params:
-    cpu: false
+    cpu: true
     batch_size: 1
     num_workers: 0
 
