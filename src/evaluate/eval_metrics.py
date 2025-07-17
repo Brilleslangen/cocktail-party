@@ -384,7 +384,7 @@ def compute_rtf_streaming(model: nn.Module, seconds: float = 10.0) -> float:
         end = time.perf_counter()
         time_taken = end - start
 
-    return time_taken / (seconds / num_steps)  # RTF
+    return (time_taken * sr) / (num_steps * step_size)
 
 
 def compute_rtf(model: nn.Module, audio_duration: float, batch_size: int = 1,
