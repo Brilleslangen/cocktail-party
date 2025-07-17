@@ -7,20 +7,19 @@ import wandb
 from omegaconf import DictConfig
 
 # Define nice colors for each model (Plotly hex codes are fine)
-model_colors = {
-    'l-conv-sym': '#1f77b4',  # Blue
-    'l-mamba-sym': '#ff7f0e',  # Orange
-    'l-transformer-sym': '#2ca02c',  # Green
-    'l-liquid-sym': '#d62728'  # Red
+type_colors = {
+    'conv': '#1f77b4',  # Blue
+    'mamba': '#ff7f0e',  # Orange
+    'transformer': '#2ca02c',  # Green
+    'liquid': '#d62728'  # Red
 }
 
-# Define nice names for legend
-model_names = {
-    'l-conv-sym': 'L-TCN',
-    'l-mamba-sym': 'L-Mamba',
-    'l-transformer-sym': 'L-Transformer',
-    'l-liquid-sym': 'L-Liquid'
-}
+
+def get_model_type(model_name):
+    for t in type_colors:
+        if t in model_name:
+            return t
+    return 'conv'  # fallback
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="runs/efficiency/compute_macs_context")
@@ -48,20 +47,21 @@ def main(cfg: DictConfig):
     x_max = df['context_size_ms'].max()
 
     # Sort models for consistent order
-    models = [m for m in model_names if m in df['model'].unique()]
+    models = [m for m in df['model'].unique() if "test" not in m.lower()]
     x_vals = np.arange(1000, 0, -100)
 
     # 1. Linear scale plot
     fig = go.Figure()
     for model in models:
         model_data = df[df['model'] == model].sort_values('context_size_ms')
+        model_type = get_model_type(model)
         fig.add_trace(
             go.Scatter(
                 x=model_data['context_size_ms'],
                 y=model_data['gmacs'],
                 mode='lines+markers',
-                name=model_names.get(model, model),
-                line=dict(color=model_colors.get(model, None), width=3),
+                name=model.capitalize(),  # Capitalize first letter
+                line=dict(color=type_colors.get(model_type, '#888'), width=3),
                 marker=dict(size=10),
                 opacity=0.95
             )
@@ -148,7 +148,7 @@ def main(cfg: DictConfig):
     print("=" * 60)
     for model in models:
         model_data = df[df['model'] == model]
-        print(f"\n{model_names.get(model, model)}:")
+        print(f"\n{models.get(model, model)}:")
         print(
             f"  Min GMACs: {model_data['gmacs'].min():.3f} (at {model_data.loc[model_data['gmacs'].idxmin(), 'context_size_ms']:.0f}ms)")
         print(
