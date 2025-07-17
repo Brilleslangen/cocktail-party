@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - m-transformer-asym
+  - _self_
+
+  - override /model_arch/separator: mamba
+
+# adjustments
+name: M-${model_arch.separator.name}-streaming-asym-bidirect
+

@@ -20,6 +20,7 @@ def main(cfg: DictConfig):
     """
     # Models to evaluate
     models_to_eval = ['l-conv-asym', 'l-mamba-asym', 'l-transformer-asym', 'l-liquid-asym',
+                      'm-conv-asym', 'm-mamba-asym', 'm-transformer-asym', 'm-liquid-asym',
                       's-conv-asym', 's-mamba-asym', 's-transformer-asym', 's-liquid-asym']
 
     # Context sizes to test (in ms)
