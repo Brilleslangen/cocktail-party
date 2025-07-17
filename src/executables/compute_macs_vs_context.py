@@ -20,9 +20,9 @@ def main(cfg: DictConfig):
     """
     # Models to evaluate
     models_to_eval = ['l-conv-sym', 'l-mamba-sym', 'l-transformer-sym', 'l-liquid-sym',
+                      'l-conv-asym', 'l-mamba-asym', 'l-transformer-asym', 'l-liquid-asym',
                       's-conv-sym', 's-mamba-sym', 's-transformer-sym', 's-liquid-sym',
                       's-conv-asym', 's-mamba-asym', 's-transformer-asym', 's-liquid-asym']
-
 
     # Context sizes to test (in ms)
     context_sizes_ms = np.arange(1000, 40, -50).tolist()  # 1000ms down to 50ms in 50ms steps

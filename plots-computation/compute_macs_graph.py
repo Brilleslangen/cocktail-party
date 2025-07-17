@@ -117,7 +117,7 @@ def main(cfg: DictConfig):
     )
 
     fig.add_annotation(
-        x=0,  # far left of plotting area
+        x=0.01,  # slightly right of left edge
         y=256,
         xref="paper",
         yref="y",
@@ -129,7 +129,7 @@ def main(cfg: DictConfig):
     )
 
     fig.add_annotation(
-        x=1,  # far right of plotting area
+        x=0.99,  # slightly left of right edge
         y=2048,
         xref="paper",
         yref="y",
@@ -161,7 +161,7 @@ def main(cfg: DictConfig):
         y0=2048,
         y1=3000,
         yref="y",
-        fillcolor="rgba(255, 0, 0, 0.2)",
+        fillcolor="rgba(255, 0, 0, 0.15)",
         line=dict(width=0),
         layer="below"
     )
