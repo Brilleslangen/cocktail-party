@@ -172,7 +172,7 @@ def compute_validation_metrics(est, mix, ref, lengths: torch.Tensor):
     Returns:
         dict with metric names and [B] tensor values
     """
-    est.float(), mix.float(), ref.float()
+    est, mix, ref = est.float(), mix.float(), ref.float()
     mc_si_sdri, mc_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=True)
     ew_si_sdri, ew_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=False)
 
