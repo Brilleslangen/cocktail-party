@@ -7,7 +7,7 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      runs/streaming: m-transformer-sym, m-mamba-asym
+      runs/streaming: m-transformer-asym, m-mamba-sym
 
 
         #S-mamba-streaming-asym-bidirect_1.10M, S-liquid-streaming-asym-bidirect_1.04M, L-transformer-streaming-sym-bidirect_19.84M

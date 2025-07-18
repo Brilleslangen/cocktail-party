@@ -136,7 +136,7 @@ def main(cfg: DictConfig):
     fig.add_shape(
         type='line',
         x0=1060, x1=-40,
-        y0=256, y1=256,
+        y0=128, y1=128,
         xref='paper', yref='y',
         line=dict(color='red', dash='dash'),
         layer="above",
@@ -156,10 +156,10 @@ def main(cfg: DictConfig):
         x0=1063,
         x1=-41,
         xref="x",
-        y0=256,
-        y1=3010,
+        y0='128',
+        y1=2048,
         yref="y",
-        fillcolor="rgba(255, 0, 0, 0.10)",
+        fillcolor="rgba(255, 165, 0, 0.10)",
         line=dict(width=0),
         layer="below"
     )
@@ -177,17 +177,17 @@ def main(cfg: DictConfig):
         layer="below"
     )
     fig.add_annotation(
-        x=750,
-        y=265,
-        xref="paper",
+        x=445,
+        y=1400,
+        xref="x",
         yref="y",
-        xshift=-200,
-        xanchor="left",
+        xanchor="right",
         yanchor="bottom",
-        text="256 GMAC/s: Ethos-U85 LOW",
+        text="<span style='display: block; text-align: right;'>Ethos-U85<br>Configuration Window",
         showarrow=False,
         font=dict(color="darkred", size=18),
-        row=1, col=1
+        row=1, col=1,
+        xshift=300
     )
     fig.add_annotation(
         x=445,
@@ -196,7 +196,7 @@ def main(cfg: DictConfig):
         yref="y",
         xanchor="right",
         yanchor="bottom",
-        text="2048 GMAC/s: Ethos-U85 MAX",
+        text="MAX: 2048 GMAC/s",
         showarrow=False,
         font=dict(color="darkred", size=18),
         row=1, col=1,
@@ -204,6 +204,17 @@ def main(cfg: DictConfig):
     )
 
     # Small models plot: row=1, col=2 (short)
+    fig.add_shape(
+        type="rect",
+        x0=1100, x1=-20,
+        xref="x",
+        y0='128', y1=230,
+        yref="y",
+        fillcolor="rgba(255, 165, 0, 0.10)",
+        line=dict(width=0),
+        layer="below",
+        row=2, col=2
+    )
     fig.add_shape(
         type='line',
         x0=1100, x1=-20,
@@ -214,6 +225,28 @@ def main(cfg: DictConfig):
         opacity=0.5,
         row=2, col=2
     )
+    fig.add_shape(
+        type='line',
+        x0=1100, x1=-20,
+        y0=128, y1=128,
+        xref='paper', yref='y',
+        line=dict(color='red', dash='dash'),
+        layer="above",
+        row=2, col=2
+    )
+    fig.add_annotation(
+        x=400,
+        y=130,
+        xref="x",
+        yref="y",
+        xanchor="right",
+        yanchor="bottom",
+        text="""<span style='display: block; text-align: right;'>128 GMAC/s: <br>Ethos-U85 LOW</span>""",
+        showarrow=False,
+        font=dict(color="darkred", size=14),
+        row=2, col=2,
+        xshift=120
+    )
     fig.add_annotation(
         x=800,
         y=6,
@@ -221,13 +254,12 @@ def main(cfg: DictConfig):
         yref="y",
         xanchor="right",
         yanchor="bottom",
-        text="""<span style='display: block; text-align: right;'>3.85 GMAC/s:          <br>DEEPSONIC (in use)</span>""",
+        text="""<span style='display: block; text-align: right;'>3.85 GMAC/s:         <br>DEEPSONIC (in use)</span>""",
         showarrow=False,
         font=dict(color="darkred", size=14),
         row=2, col=2,
         xshift=80
     )
-
     # --- Layout ---
     fig.update_layout(
         xaxis=dict(
