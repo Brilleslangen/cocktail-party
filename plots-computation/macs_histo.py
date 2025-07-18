@@ -1,7 +1,7 @@
 import numpy as np
 import plotly.graph_objects as go
 
-# ============================================================
+# =================================
 # | Model              |   GMAC/s |
 # |--------------------|----------|
 # | l-conv-sym         | 15.66538 |
@@ -12,6 +12,14 @@ import plotly.graph_objects as go
 # | l-mamba-asym       | 88.55624 |
 # | l-transformer-asym | 89.55902 |
 # | l-liquid-asym      | 90.32193 |
+# | m-conv-sym         |  4.21003 |
+# | m-mamba-sym        |  3.81629 |
+# | m-transformer-sym  |  3.83464 |
+# | m-liquid-sym       |  3.81812 |
+# | m-conv-asym        | 22.89739 |
+# | m-mamba-asym       | 22.86703 |
+# | m-transformer-asym | 23.16070 |
+# | m-liquid-asym      | 22.87797 |
 # | s-conv-sym         |  0.99517 |
 # | s-mamba-sym        |  0.82096 |
 # | s-transformer-sym  |  0.80942 |
@@ -21,75 +29,89 @@ import plotly.graph_objects as go
 # | s-transformer-asym |  4.90679 |
 # | s-liquid-asym      |  4.64133 |
 # | s-mamba-short-asym |  1.09256 |
-# ============================================================
+# ==================================
 
-# Large models (L)
+# === Large models (L) ===
 large_sym_mac_dict = {
-    "l-conv-sym": 15.66538,
-    "l-mamba-sym": 14.76449,
-    "l-transformer-sym": 14.87042,
-    "l-liquid-sym": 15.05877,
+    "L-conv-sym":         15.66538,
+    "L-mamba-sym":        14.76449,
+    "L-transformer-sym":  14.87042,
+    "L-liquid-sym":       15.05877,
 }
 large_asym_mac_dict = {
-    "l-conv-asym": 89.29738,
-    "l-mamba-asym": 88.55624,
-    "l-transformer-asym": 89.55902,
-    "l-liquid-asym": 90.32193,
+    "L-conv-asym":        89.29738,
+    "L-mamba-asym":       88.55624,
+    "L-transformer-asym": 89.55902,
+    "L-liquid-asym":      90.32193,
 }
 
-# Small models (S)
+# === Medium models (M) ===
+medium_sym_mac_dict = {
+    "M-conv-sym":         4.21003,
+    "M-mamba-sym":        3.81629,
+    "M-transformer-sym":  3.83464,
+    "M-liquid-sym":       3.81812,
+}
+medium_asym_mac_dict = {
+    "M-conv-asym":        22.89739,
+    "M-mamba-asym":       22.86703,
+    "M-transformer-asym": 23.16070,
+    "M-liquid-asym":      22.87797,
+}
+
+# === Small models (S) ===
 small_sym_mac_dict = {
-    "s-conv-sym": 0.99517,
-    "s-mamba-sym": 0.82096,
-    "s-transformer-sym": 0.80942,
-    "s-liquid-sym": 0.77868,
+    "S-conv-sym":         0.99517,
+    "S-mamba-sym":        0.82096,
+    "S-transformer-sym":  0.80942,
+    "S-liquid-sym":       0.77868,
 }
 small_asym_mac_dict = {
-    "s-conv-asym": 4.89573,
-    "s-mamba-asym": 4.89502,
-    "s-transformer-asym": 4.90679,
-    "s-liquid-asym": 4.64133,
+    "S-conv-asym":        4.89573,
+    "S-mamba-asym":       4.89502,
+    "S-transformer-asym": 4.90679,
+    "S-liquid-asym":      4.64133,
 }
 small_short_mac_dict = {
-    "s-mamba-short-asym": 1.09256,
+    "S-mamba-short-asym": 1.09256,
 }
-# Two spacers for more visible group separation
-spacer = {"": None}
-double_spacer = {"": None, " ": None}
 
 # Merge for plotting with double spacers
 plot_dict = {}
 plot_dict.update(small_sym_mac_dict)
 plot_dict.update(small_short_mac_dict)
-plot_dict.update(double_spacer)
+plot_dict.update({"": None})
+plot_dict.update(medium_sym_mac_dict)
+plot_dict.update({" ": None})
 plot_dict.update(small_asym_mac_dict)
-plot_dict.update(double_spacer)
-plot_dict.update()
-plot_dict.update(double_spacer)
-plot_dict.update(asym_mac_dict)
+plot_dict.update({"  ": None})
+plot_dict.update(medium_asym_mac_dict)
+plot_dict.update({"   ": None})
+plot_dict.update(large_sym_mac_dict)
 
 x_labels = list(plot_dict.keys())
 mac_values = [v if v is not None else np.nan for v in plot_dict.values()]
 
 
+
 def get_model_type(model_name):
     if "conv" in model_name:
-        return "Conv"
+        return "conv"
     if "transformer" in model_name:
-        return "Transformer"
+        return "transformer"
     if "mamba" in model_name:
-        return "Mamba"
+        return "mamba"
     if "liquid" in model_name:
-        return "Liquid"
-    return "Other"
+        return "liquid"
+    return "other"
 
 
 model_type_colors = {
-    "Conv": "#C565C7",
-    "Transformer": "#E57439",
-    "Mamba": "#A0C75C",
-    "Liquid": "#5BC5DB",
-    "Other": "gray"
+    "conv": "#b8bc1b",
+    "transformer": "#379393",
+    "mamba": "#5b5bd3",
+    "liquid": "#d35959",
+    "other": "gray"
 }
 
 bar_colors = [
@@ -123,7 +145,7 @@ fig.add_annotation(
     xshift=-15,
     text="3.85 GMAC/s: DEEPSONIC chip deployed in current hearing aid",
     showarrow=False,
-    font=dict(color="red", size=18)  # Larger text size here!
+    font=dict(color="darkred", size=18)  # Larger text size here!
 )
 
 fig.add_shape(
@@ -148,7 +170,14 @@ fig.add_shape(
 )
 
 fig.update_layout(
-    title='MAC/s per Model',
+    title={
+            'text': "MAC/s Histogram for All Model Variants",
+            'y':0.93,  # Vertical position (0 is bottom, 1 is top)
+            'x':0.5,   # Center horizontally
+            'xanchor': 'center',
+            'yanchor': 'top',
+            'font': dict(size=26)
+        },
     xaxis_title='Model',
     yaxis_title='GMAC/s',
     yaxis=dict(range=[0, max(mac_values) * 1.3]),

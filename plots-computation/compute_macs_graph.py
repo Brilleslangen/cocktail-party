@@ -7,17 +7,16 @@ import wandb
 from omegaconf import DictConfig
 from plotly.subplots import make_subplots
 
-# Define nice colors for each model (Plotly hex codes are fine)
-type_colors = {
-    'conv': '#1f77b4',  # Blue
-    'mamba': '#ff7f0e',  # Orange
-    'transformer': '#2ca02c',  # Green
-    'liquid': '#d62728'  # Red
+model_type_colors = {
+    "conv": "#b8bc1b",
+    "transformer": "#379393",
+    "mamba": "#5b5bd3",
+    "liquid": "#d35959",
 }
 
 
 def get_model_type(model_name):
-    for t in type_colors:
+    for t in model_type_colors:
         if t in model_name:
             return t
     return 'conv'  # fallback
@@ -70,7 +69,7 @@ def main(cfg: DictConfig):
 
     # --- Left Plot: All Models (tall, row=1:2, col=1) ---
     # Add proxy legend traces for type legend
-    for model_type, color in type_colors.items():
+    for model_type, color in model_type_colors.items():
         fig.add_trace(
             go.Scatter(
                 x=[None], y=[None],
@@ -107,7 +106,7 @@ def main(cfg: DictConfig):
                 x=model_data['context_size_ms'],
                 y=model_data['gmacs'],
                 mode='lines+markers',
-                line=dict(color=type_colors.get(model_type, '#888'), width=3),
+                line=dict(color=model_type_colors.get(model_type, '#888'), width=3),
                 marker=dict(size=10),
                 opacity=0.95,
                 showlegend=False
@@ -124,7 +123,7 @@ def main(cfg: DictConfig):
                 x=model_data['context_size_ms'],
                 y=model_data['gmacs'],
                 mode='lines+markers',
-                line=dict(color=type_colors.get(model_type, '#888'), width=3, dash="dot"),
+                line=dict(color=model_type_colors.get(model_type, '#888'), width=3, dash="dot"),
                 marker=dict(size=10),
                 opacity=0.95,
                 showlegend=False
@@ -222,7 +221,7 @@ def main(cfg: DictConfig):
         yref="y",
         xanchor="right",
         yanchor="bottom",
-        text="""<span style='display: block; text-align: right;'>3.85 GMAC/s:          <br>DEEP SONIC (in use)</span>""",
+        text="""<span style='display: block; text-align: right;'>3.85 GMAC/s:          <br>DEEPSONIC (in use)</span>""",
         showarrow=False,
         font=dict(color="darkred", size=14),
         row=2, col=2,
