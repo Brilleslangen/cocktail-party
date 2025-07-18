@@ -19,8 +19,8 @@ model_arch:
   streaming_mode: false
 
   encoder:
-    causal: false
+    causal: true
   decoder:
-    causal: false
+    causal: true
   separator:
-    causal_proj: false
+    causal_proj: true
