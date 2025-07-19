@@ -36,6 +36,7 @@ def per_sample_sdr(
     # Check if the reference and estimate are identical and add some noise to avoid divison by zero, returning nan.
 
     # This is a workaround for the case when the reference and estimate are identical,
+
     if torch.allclose(reference, estimate, atol=1e-8):
         estimate = _perfect_estimate_noise(estimate, reference.device)
 
@@ -171,6 +172,7 @@ def compute_validation_metrics(est, mix, ref, lengths: torch.Tensor):
     Returns:
         dict with metric names and [B] tensor values
     """
+    est, mix, ref = est.float(), mix.float(), ref.float()
     mc_si_sdri, mc_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=True)
     ew_si_sdri, ew_si_sdr_est = compute_si_sdr_i(est, mix, ref, lengths, multi_channel=False)
 

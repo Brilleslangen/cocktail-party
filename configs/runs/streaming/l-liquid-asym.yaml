@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - l-transformer-asym
+  - _self_
+
+  - override /model_arch/separator: liquid
+
+# adjustments
+name: L-${model_arch.separator.name}-streaming-asym-bidirect
+

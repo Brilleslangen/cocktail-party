@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+  - s-transformer-asym
+  - _self_
+
+# adjustments
+name: M-${model_arch.separator.name}-streaming-asym-bidirect
+
+model_arch:
+    separator:
+      scaler: 1.0
+      context_size_ms: 34.0

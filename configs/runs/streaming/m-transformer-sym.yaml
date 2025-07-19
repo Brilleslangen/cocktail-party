@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - s-transformer-sym
+  - _self_
+
+# adjustments
+name: M-${model_arch.separator.name}-streaming-sym-bidirect
+
+model_arch:
+    separator:
+      scaler: 1.0

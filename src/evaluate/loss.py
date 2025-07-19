@@ -72,11 +72,12 @@ class EnergyWeightedMaskedSNRLoss(nn.Module):
         lossR = masked_snr_loss(est[:, 1, :], ref[:, 1, :], mask, self.loss_scale)
 
         # Energy-based weighting
-        energyL = ((ref[:, 0, :] * mask) ** 2).sum(dim=1)
-        energyR = ((ref[:, 1, :] * mask) ** 2).sum(dim=1)
-        total_energy = energyL + energyR + 1e-8
-        weightL = energyL / total_energy
-        weightR = energyR / total_energy
+        # energyL = ((ref[:, 0, :] * mask) ** 2).sum(dim=1)
+        # energyR = ((ref[:, 1, :] * mask) ** 2).sum(dim=1)
+        # total_energy = energyL + energyR + 1e-8
+        # weightL = energyL / total_energy
+        # weightR = energyR / total_energy
+        weightL, weightR = 0.5, 0.5  # Equal weighting for left and right channels
 
         # Weighted loss per sample
         loss = weightL * lossL + weightR * lossR  # [B]

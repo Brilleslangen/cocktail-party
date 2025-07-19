@@ -36,7 +36,7 @@ class Streamer:
         out = self.model(self.buffer)  # [B, C, chunk_size]
         return out.cpu()
 
-    def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.LongTensor,
+    def stream_batch(self, mix_batch: Tensor, refs: Tensor, lengths: torch.Tensor,
                      trim_warmup=True) -> tuple[Tensor, Tensor, Tensor]:
         B, C, T = mix_batch.shape
 

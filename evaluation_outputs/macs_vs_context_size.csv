@@ -1,0 +1,4 @@
+model,context_size_ms,macs,gmacs,pretty_macs
+test,0,0,0,0
+l-conv-sym,1000,2460247776000,2460.247776,2.46T
+l-conv-sym,950,2337527776000,2337.527776,2.34T

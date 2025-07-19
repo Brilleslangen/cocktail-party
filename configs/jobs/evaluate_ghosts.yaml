@@ -16,6 +16,8 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      model_artifact: ghost-targets-offline_8.19K:latest, ghost-mix-offline_8.19K:latest, 
-                      ghost-targets-streaming_8.19K:latest, ghost-mix-streaming_8.19K:latest
+      model_artifact: ghost-targets-offline_8.19K:latest
+#                      ghost-mix-offline_8.19K:latest,
+#                      ghost-targets-streaming_8.19K:latest,
+#                      ghost-mix-streaming_8.19K:latest
 

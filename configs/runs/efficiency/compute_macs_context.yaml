@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - /dataset: static_big
+  - /training: local
+  - /wandb: default
+  - _self_
+
+# Use CPU to avoid GPU allocation for simple MAC counting
+training:
+  params:
+    cpu: true
+    batch_size: 1
+    num_workers: 0
+
+# Group name for organization
+group: efficiency
