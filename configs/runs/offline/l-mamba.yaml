@@ -3,7 +3,7 @@ defaults:
   - m-mamba
   - _self_
 
-name: L-${model_arch.name}-offline
+name: L-${model_arch.name}-offline-no-ew
 
 # Adjustments
 model_arch:
