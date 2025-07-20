@@ -50,7 +50,7 @@
       vertical-align: middle;
     }
     img.diagram {
-      width: 80vw;
+      width: 40vw;
       height: auto;
       display: block;
       margin: 10px 0;
@@ -65,7 +65,10 @@
   <main>
     <section>
       <h2>Abstract</h2>
-      <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Saepe molestias neque incidunt ut maxime quidem vel voluptate ab, ipsum repellat molestiae doloremque vitae, aliquid architecto hic at nobis cum repudiandae.</p>
+      <p>Noisy, multi-speaker environments produce complex auditory scenes that can be challenging to navigate. This is especially true for individuals with hearing loss, even when assistive technologies are utilized. To propose systems that emulate selective speech isolation in hearing aids for such scenarios, this thesis examines both established and emerging neural architectures. More specifically, Transformers and Convolutional architectures are evaluated and compared against less prominent ones, including Structured State Space Models and Liquid Neural Networks. Notably, the first group represents stateless architecture types, while the latter two represent stateful architecture types.</p>
+      <p>The proposed system pipeline enables a fair comparison of the architectures in terms of binaural speech isolation and target selectivity, with the goal of robustly transforming heavily distorted multi-speaker audio into a single-target speech signal. The target speaker is selected based on the listener's behavioral attention, implicitly encoded in binaural cues. The dataset is simulated and filtered to represent significantly more challenging scenarios than those typically used in speech separation, and the resulting average signal strength of the distortions is above twice that of the target signal within this dataset. By designing the training and evaluation data to encode user focus as the speaker facing the listener's direction, our system consistently focuses on the target speech, achieving a target confusion rate of only 2-3%.</p>
+      <p>Our system is tested in both traditional offline settings, where entire audio clips are processed, and in explicit streaming settings, where models are sequentially fed small chunks within an audio sequence to iteratively process the sequence as a whole. This is to ensure that the latency constraints inherent in hearing aid technology are met. We compare how context size affects the performance of the models and the impact of a hidden state that persists across chunk synthesis within a sequence. Additionally, we analyze the computational costs of this process, evaluating all model variations against the computational thresholds of both current and next-generation hearing aid hardware. </p>
+      <p>Our findings indicate that Mamba-2, representing structured state space models, has a clear advantage in resource-constrained selective speech isolation compared to the other evaluated architectures, in both offline and streaming environments. Mamba-2 consistently performs best across all metrics, model size ranges, and processing modes, while maintaining the highest computational efficiency. Notably, explicitly enforcing a persistent hidden state across chunk synthesis contexts within an audio sequence allows stateful models to significantly outperform stateless models, while keeping compute demands per second minimal. Our best streaming model, the ~1 million parameter Mamba-2, is both performance-wise and computationally feasible for use on current hearing aid hardware. However, adapting its underlying algorithmic methods to embedded hardware interfaces is required before real-world deployment can be achieved.</p>
     </section>
         <section>
       <h2>System Architecture</h2>
@@ -74,6 +77,8 @@
     </section>
     <section>
       <h2>Audio Examples</h2>
+      <h3>Example 1</h3>
+      <h4>Offline Models</h4>
       <table class="audio-table">
         <thead>
           <tr>
@@ -132,6 +137,395 @@
             <td>S-liquid</td>
             <td>
               <audio controls src="audio/S-liquid-offline_1.08M_mix_clip_000847_clip_002307_separated.wav"></audio>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h4>Streaming Models</h4>
+      <table class="audio-table">
+        <thead>
+          <tr>
+            <th>Input</th>
+            <th>Model</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="12">
+              <audio controls src="audio/mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+            <td>L-mamba-sym</td>
+            <td>
+              <audio controls src="audio/L-mamba-streaming-sym-bidirect_19.74M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-transformer-sym</td>
+            <td>
+              <audio controls src="audio/L-transformer-streaming-sym-bidirect-2_19.84M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-liquid-sym</td>
+            <td>
+              <audio controls src="audio/L-liquid-streaming-sym-bidirect_20.11M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba-sym</td>
+            <td>
+              <audio controls src="audio/M-mamba-streaming-sym-bidirect_5.11M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba-asym</td>
+            <td>
+              <audio controls src="audio/M-mamba-streaming-asym-bidirect_5.11M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-sym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-sym-bidirect_1.10M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-transformer-sym</td>
+            <td>
+              <audio controls src="audio/S-transformer-streaming-sym-bidirect_1.08M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid-sym</td>
+            <td>
+              <audio controls src="audio/S-liquid-streaming-sym-bidirect_1.04M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-short-asym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-short-asym-bidirect_1.10M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-asym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-asym-bidirect_1.10M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-transformer</td>
+            <td>
+              <audio controls src="audio/S-transformer-streaming-asym-bidirect_1.08M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid-asym</td>
+            <td>
+              <audio controls src="audio/S-liquid-streaming-asym-bidirect_1.04M_mix_clip_000847_clip_002307.wav"></audio>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Example 2</h3>
+      <h4>Offline Models</h4>
+      <table class="audio-table">
+        <thead>
+          <tr>
+            <th>Input</th>
+            <th>Model</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="8">
+              <audio controls src="audio/mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+            <td>L-conv</td>
+            <td>
+              <audio controls src="audio/L-conv-offline_19.88M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-transformer</td>
+            <td>
+              <audio controls src="audio/L-transformer-offline_19.84M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-mamba</td>
+            <td>
+              <audio controls src="audio/L-mamba-offline_19.74M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba</td>
+            <td>
+              <audio controls src="audio/M-mamba-offline_5.11M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba</td>
+            <td>
+              <audio controls src="audio/S-mamba-offline_1.10M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-liquid</td>
+            <td>
+              <audio controls src="audio/L-liquid-offline_20.11M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-liquid</td>
+            <td>
+              <audio controls src="audio/M-liquid-offline_5.10M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid</td>
+            <td>
+              <audio controls src="audio/S-liquid-offline_1.08M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h4>Streaming Models</h4>
+      <table class="audio-table">
+        <thead>
+          <tr>
+            <th>Input</th>
+            <th>Model</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="12">
+              <audio controls src="audio/mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+            <td>L-mamba-sym</td>
+            <td>
+              <audio controls src="audio/L-mamba-streaming-sym-bidirect_19.74M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-transformer-sym</td>
+            <td>
+              <audio controls src="audio/L-transformer-streaming-sym-bidirect_19.84M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-liquid-sym</td>
+            <td>
+              <audio controls src="audio/L-liquid-streaming-sym-bidirect_20.11M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba-sym</td>
+            <td>
+              <audio controls src="audio/M-mamba-streaming-sym-bidirect_5.11M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba-asym</td>
+            <td>
+              <audio controls src="audio/M-mamba-streaming-asym-bidirect_5.11M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-sym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-sym-bidirect_1.10M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-transformer-sym</td>
+            <td>
+              <audio controls src="audio/S-transformer-streaming-sym-bidirect_1.08M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid-sym</td>
+            <td>
+              <audio controls src="audio/S-liquid-streaming-sym-bidirect_1.04M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-short-asym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-short-asym-bidirect_1.10M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-asym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-asym-bidirect_1.10M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-transformer</td>
+            <td>
+              <audio controls src="audio/S-transformer-streaming-asym-bidirect_1.08M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid-asym</td>
+            <td>
+              <audio controls src="audio/S-liquid-streaming-asym-bidirect_1.04M_mix_clip_004088_clip_022510.wav"></audio>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Example 3</h3>
+      <h4>Offline Models</h4>
+      <table class="audio-table">
+        <thead>
+          <tr>
+            <th>Input</th>
+            <th>Model</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="8">
+              <audio controls src="audio/mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+            <td>L-conv</td>
+            <td>
+              <audio controls src="audio/L-conv-offline_19.88M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-transformer</td>
+            <td>
+              <audio controls src="audio/L-transformer-offline_19.84M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-mamba</td>
+            <td>
+              <audio controls src="audio/L-mamba-offline_19.74M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba</td>
+            <td>
+              <audio controls src="audio/M-mamba-offline_5.11M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba</td>
+            <td>
+              <audio controls src="audio/S-mamba-offline_1.10M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-liquid</td>
+            <td>
+              <audio controls src="audio/L-liquid-offline_20.11M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-liquid</td>
+            <td>
+              <audio controls src="audio/M-liquid-offline_5.10M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid</td>
+            <td>
+              <audio controls src="audio/S-liquid-offline_1.08M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h4>Streaming Models</h4>
+      <table class="audio-table">
+        <thead>
+          <tr>
+            <th>Input</th>
+            <th>Model</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="12">
+              <audio controls src="audio/mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+            <td>L-mamba-sym</td>
+            <td>
+              <audio controls src="audio/L-mamba-streaming-sym-bidirect_19.74M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-transformer-sym</td>
+            <td>
+              <audio controls src="audio/L-transformer-streaming-sym-bidirect_19.84M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>L-liquid-sym</td>
+            <td>
+              <audio controls src="audio/L-liquid-streaming-sym-bidirect_20.11M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba-sym</td>
+            <td>
+              <audio controls src="audio/M-mamba-streaming-sym-bidirect_5.11M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>M-mamba-asym</td>
+            <td>
+              <audio controls src="audio/M-mamba-streaming-asym-bidirect_5.11M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-sym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-sym-bidirect_1.10M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-transformer-sym</td>
+            <td>
+              <audio controls src="audio/S-transformer-streaming-sym-bidirect_1.08M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid-sym</td>
+            <td>
+              <audio controls src="audio/S-liquid-streaming-sym-bidirect_1.04M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-short-asym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-short-asym-bidirect_1.10M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-mamba-asym</td>
+            <td>
+              <audio controls src="audio/S-mamba-streaming-asym-bidirect_1.10M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-transformer</td>
+            <td>
+              <audio controls src="audio/S-transformer-streaming-asym-bidirect_1.08M_mix_clip_003362_clip_036113.wav"></audio>
+            </td>
+          </tr>
+          <tr>
+            <td>S-liquid-asym</td>
+            <td>
+              <audio controls src="audio/S-liquid-streaming-asym-bidirect_1.04M_mix_clip_003362_clip_036113.wav"></audio>
             </td>
           </tr>
         </tbody>
