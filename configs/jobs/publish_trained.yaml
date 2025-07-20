@@ -12,15 +12,10 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      publish_model: S-conv-streaming-asym-bidirect_1.10M.pt,
-                     S-conv-streaming-sym-bidirect_1.10M.pt,
-                     S-mamba-streaming-short-asym-bidirect_1.10M.pt,
-                     S-mamba-streaming-asym-bidirect_1.10M.pt,
-                     L-mamba-streaming-sym-bidirect_19.74M.pt,
-                     S-mamba-streaming-sym-bidirect_1.10M.pt,
-                     S-liquid-streaming-asym-bidirect_1.04M.pt,
-                     S-liquid-streaming-sym-bidirect_1.04M.pt,
-                     L-liquid-streaming-sym-bidirect_20.11M.pt
+      publish_model: M-transformer-streaming-asym-bidirect_5.11M.pt,
+        M-mamba-streaming-asym-bidirect_5.11M.pt,
+        S-liquid-streaming-asym-bidirect-2_1.04M.pt,
+        S-mamba-streaming-asym-bidirect-2_1.10M.pt
 
 
 
