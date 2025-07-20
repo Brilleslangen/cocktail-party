@@ -9,8 +9,8 @@ model_artifact: none
 
 
 inference:
-  input_audio_file: "test\\mixture\\mix_clip_002924_clip_011392.wav"
-  output_audio_file: "mix_clip_002924_clip_011392.wav"
+  input_audio_file: "test\\mixture\\mix_clip_000847_clip_002307.wav"
+  output_audio_file: "mix_clip_000847_clip_002307.wav"
   output_dir: "outputs/inference"
   save_to_wandb: false
 
@@ -23,14 +23,12 @@ hydra:
   sweeper:
     params:
       model_artifact:
-        # L-conv-offline_19.88M:v0,
-        # S-liquid-offline_1.08M:v0,
-        # M-liquid-offline_5.10M:v0,
-        # L-liquid-offline_20.11M:v0,
-        # L-transformer-offline_19.84M:v0
-        L-mamba-offline_19.74M:v0,
-        M-mamba-offline_5.11M:v0,
-        S-mamba-offline_1.10M:v0
+        S-mamba-streaming-sym-bidirect_1.10M:v0,
+        L-mamba-streaming-sym-bidirect_19.74M:v0,
+        S-mamba-streaming-asym-bidirect_1.10M:v0,
+        S-mamba-streaming-short-asym-bidirect_1.10M:v0,
+        S-mamba-streaming-short-asym_1.10M:v0,
+
 
 
 training:
@@ -38,3 +36,5 @@ training:
     batch_size: 1
     use_amp: false
     num_workers: 10
+
+streaming_mode: true 

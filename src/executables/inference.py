@@ -6,6 +6,7 @@ import wandb
 from omegaconf import DictConfig
 from hydra.utils import instantiate
 from src.helpers import select_device
+from src.data.streaming import Streamer
 
 
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="inference/default")
@@ -36,7 +37,6 @@ def run_inference(cfg: DictConfig):
 
     state = torch.load(artifact_path, map_location=device, weights_only=False)
 
-    # Extract model config from checkpoint
     if 'cfg' not in state:
         raise ValueError("Checkpoint does not contain model configuration.")
 
@@ -51,7 +51,7 @@ def run_inference(cfg: DictConfig):
     print("✅ Model loaded successfully")
 
     # Load input audio
-    dataset_dir = os.path.join("artifacts", "static-2-spk-noise12")
+    dataset_dir = os.path.join("artifacts", cfg.dataset.artifact_name)
     input_audio_path = os.path.join(dataset_dir, cfg.inference.input_audio_file)
     waveform, sample_rate = torchaudio.load(input_audio_path)
     if sample_rate != artifact_cfg['model_arch']['sample_rate']:
@@ -61,8 +61,21 @@ def run_inference(cfg: DictConfig):
 
     # Run inference
     waveform = waveform.unsqueeze(0).to(device)
+
     with torch.no_grad():
-        ests = model(waveform)
+        if cfg.streaming_mode:
+            streamer = Streamer(model)
+            dummy_refs = torch.zeros_like(waveform)
+            input_length = torch.tensor([waveform.shape[-1]])
+
+            ests, _, _ = streamer.stream_batch(
+                mix_batch=waveform, 
+                refs=dummy_refs, 
+                lengths=input_length, 
+                trim_warmup=True
+            )
+        else:
+            ests = model(waveform)
 
     # Save output
     separated = ests.squeeze(0).cpu()
