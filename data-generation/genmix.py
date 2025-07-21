@@ -44,7 +44,7 @@ def load_audio(name):
 def load_hrir(azimuth, subject_path):
     mat_data = scipy.io.loadmat(subject_path / "hrir_final.mat")
     azimuths = CIPIC_AZIMUTHS
-    elev_idx = 8 # Head height
+    elev_idx = 8
     az_idx = np.argmin(np.abs(azimuths - azimuth))
     hrir_l = mat_data['hrir_l'][az_idx, elev_idx, :]
     hrir_r = mat_data['hrir_r'][az_idx, elev_idx, :]
@@ -92,7 +92,7 @@ def pos_from_azimuth(azimuth, distance, mic_pos, room_dim):
     return [np.clip(x, 0.1, room_dim[0]-0.1), np.clip(y, 0.1, room_dim[1]-0.1), mic_pos[2]]
 
 
-def adjust_loudness(target, interferer, snr_db=5.0):
+def adjust_loudness(target, interferer, snr_db=0.0):
     """
     Adjust loudness of interferer to ensure target has higher energy.
     """
@@ -170,8 +170,8 @@ def process_pair(f1, f2, split, writer):
     else:
         target_binaural, interferer_binaural = s2_binaural, s1_binaural
 
-    # Adjust interferer loudness explicitly to achieve desired SNR (target louder)
-    interferer_binaural_adjusted = adjust_loudness(target_binaural, interferer_binaural, snr_db=5.0)
+    # Adjust interferer loudness explicitly (SET 0 UNLESS DEBUGGING/TESTING)
+    interferer_binaural_adjusted = adjust_loudness(target_binaural, interferer_binaural, snr_db=0.0)
 
     # Create final mix
     mix_clean = target_binaural + interferer_binaural_adjusted
